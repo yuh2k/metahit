@@ -1,1 +1,1 @@
-# metahit
+# MetaHit
