@@ -1,15 +1,32 @@
-FROM continuumio/miniconda3
+FROM ubuntu:20.04
 
-# Python 3.8, OpenJDK
-RUN conda create -n myenv python=3.8 openjdk=11 -y
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN echo "conda activate myenv" >> ~/.bashrc
-SHELL ["conda", "run", "-n", "myenv", "/bin/bash", "-c"]
+RUN apt-get update && apt-get install -y \
+    openjdk-11-jre-headless \
+    wget \
+    unzip \
+    perl \
+    python3 \
+    python3-pip \
+    && apt-get clean
 
-RUN conda install -n myenv -c conda-forge numpy pandas biopython -y
+# FastQC
+RUN wget https://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v0.11.9.zip \
+    && unzip fastqc_v0.11.9.zip \
+    && chmod +x FastQC/fastqc \
+    && mv FastQC /opt/fastqc
 
-WORKDIR /workspace
+# BTools
+RUN wget https://downloads.sourceforge.net/project/bbmap/BBMap_38.94.tar.gz \
+    && tar -xzf BBMap_38.94.tar.gz \
+    && mv bbmap /opt/bbmap
 
-COPY . /workspace
 
-CMD ["bash"]
+
+WORKDIR /data
+
+COPY read_qc.sh /opt/read_qc.sh
+RUN chmod +x /opt/read_qc.sh
+
+ENTRYPOINT ["/opt/read_qc.sh"]
