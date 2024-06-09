@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 
+###########################################################################################################################################################
+#       	                                                                                                                                          #
+# This script is meant to be a comprehensive solution to QC new HiSeq reads in preparation for assembly and other operations.                             #
+# The main things this pipeline accomplishes are read trimming based on quality scores, and removal of human sequences.                                   #
+# The script also produces a FASTQC report before and after the procedures.                                                                               #
+#	                                                                                                                                 		  #
+###########################################################################################################################################################
+
+# Function to display the help message
 help_message () {
     echo ""
     echo "Usage: read_qc.sh [options] -1 reads_1.fastq -2 reads_2.fastq -o output_dir"
@@ -10,25 +19,29 @@ help_message () {
     echo "    -2 STR          reverse fastq reads" 
     echo "    -o STR          output directory"
     echo "    -t INT          number of threads (default=1)"
-    echo "    -x STR    prefix of host index in bbmap database folder (default=hg38)"
+    echo "    -x STR          prefix of host index in bbmap database folder (default=hg38)"
     echo ""
-    echo "    --skip-bbduk        dont remove human sequences with bbduk"
-    echo "    --skip-trimming    dont trim sequences with bbduk"
-    echo "    --skip-pre-qc-report    dont make FastQC report of input sequences"
-    echo "    --skip-post-qc-report    dont make FastQC report of final sequences"
+    echo "    --skip-bbduk        don't remove human sequences with bbduk"
+    echo "    --skip-trimming     don't trim sequences with bbduk"
+    echo "    --skip-pre-qc-report don't make FastQC report of input sequences"
+    echo "    --skip-post-qc-report don't make FastQC report of final sequences"
     echo "";}
 
-# default params
+########################################################################################################
+########################               LOADING IN THE PARAMETERS                ########################
+########################################################################################################
+
+# Default parameters
 threads=1; out="false"; reads_1="false"; reads_2="false"
 bbduk=true; trim=true; pre_qc_report=true; post_qc_report=true
 HOST=hg38
 
-# load in params
+# Load in parameters using getopt
 OPTS=`getopt -o ht:o:1:2:x: --long help,skip-trimming,skip-bbduk,skip-pre-qc-report,skip-post-qc-report -- "$@"`
-# make sure the params are entered correctly
+# Make sure the parameters are entered correctly
 if [ $? -ne 0 ]; then help_message; exit 1; fi
 
-# loop through input params
+# Loop through input parameters
 while true; do
     case "$1" in
         -t) threads=$2; shift 2;;
@@ -46,25 +59,40 @@ while true; do
     esac
 done
 
-# check if all parameters are entered
+########################################################################################################
+########################           MAKING SURE EVERYTHING IS SET UP             ########################
+########################################################################################################
+
+# Check if all required parameters are entered
 if [ "$out" = "false" ] || [ "$reads_1" = "false" ] || [ "$reads_2" = "false" ]; then 
     help_message; exit 1
 fi
 
+# Check if forward and reverse reads are the same file
 if [ "$reads_1" = "$reads_2" ]; then
     echo "The forward and reverse reads are the same file. Exiting pipeline."
     exit 1
 fi
 
-# check if output directory exists, if not, create it
+# Check if output directory exists, if not, create it
 if [ ! -d $out ]; then
         mkdir -p $out
 else
         echo "Warning: $out already exists."
 fi
 
+########################################################################################################
+########################                    BEGIN PIPELINE!                     ########################
+########################################################################################################
+
+# Check if input read files exist
+if [ ! -s $reads_1 ]; then echo "$reads_1 file does not exist. Exiting..."; exit 1; fi
+if [ ! -s $reads_2 ]; then echo "$reads_2 file does not exist. Exiting..."; exit 1; fi
+
 if [ "$pre_qc_report" = true ]; then
-    # Pre-QC report
+    ########################################################################################################
+    ########################                 MAKING PRE-QC REPORT                   ########################
+    ########################################################################################################
     echo "Making Pre-QC report"
     mkdir -p ${out}/pre-QC_report
     fastqc -q -t $threads -o ${out}/pre-QC_report -f fastq $reads_1 $reads_2
@@ -78,7 +106,9 @@ if [ "$pre_qc_report" = true ]; then
 fi
 
 if [ "$trim" = true ]; then
-    # Trimming reads using BBDuk
+    ########################################################################################################
+    ########################                 RUNNING BBDuk FOR TRIMMING                    ########################
+    ########################################################################################################
     echo "Running BBDuk for trimming"
     /Users/bach/Downloads/bbmap/bbduk.sh -Xmx16g in1=$reads_1 in2=$reads_2 out1=${out}/trimmed_1.fastq out2=${out}/trimmed_2.fastq ref=/Users/bach/Downloads/bbmap/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 tpe tbo qtrim=rl trimq=10 minlen=50
     
@@ -93,7 +123,9 @@ if [ "$trim" = true ]; then
 fi
 
 if [ "$bbduk" = true ]; then
-    # Removing host sequences with BBDuk
+    ########################################################################################################
+    ########################               REMOVING HOST SEQUENCES                  ########################
+    ########################################################################################################
     echo "Removing host sequences with BBDuk"
     /Users/bach/Downloads/bbmap/bbduk.sh -Xmx16g in1=$reads_1 in2=$reads_2 out1=${out}/cleaned_1.fastq out2=${out}/cleaned_2.fastq ref=/Users/bach/Downloads/bbmap/resources/hg38.fa k=31 hdist=1
     
@@ -107,12 +139,15 @@ if [ "$bbduk" = true ]; then
     reads_2=${out}/cleaned_2.fastq
 fi    
 
+# Move final clean reads to their respective files
 mv $reads_1 ${out}/final_pure_reads_1.fastq
 mv $reads_2 ${out}/final_pure_reads_2.fastq
 echo "Contamination-free and trimmed reads are stored in: ${out}/final_pure_reads_1.fastq and ${out}/final_pure_reads_2.fastq"
 
 if [ "$post_qc_report" = true ]; then
-    # Post-QC report
+    ########################################################################################################
+    ########################                 MAKING POST-QC REPORT                  ########################
+    ########################################################################################################
     echo "Making Post-QC report"
     mkdir -p ${out}/post-QC_report
     fastqc -t $threads -o ${out}/post-QC_report -f fastq ${out}/final_pure_reads_1.fastq ${out}/final_pure_reads_2.fastq
@@ -125,4 +160,7 @@ if [ "$post_qc_report" = true ]; then
     echo "Post-QC report saved to: ${out}/post-QC_report"
 fi
 
+########################################################################################################
+########################              READ QC PIPELINE COMPLETE!!!              ########################
+########################################################################################################
 echo "READ QC PIPELINE COMPLETE!!!"
