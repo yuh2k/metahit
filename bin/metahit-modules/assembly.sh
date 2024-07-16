@@ -27,8 +27,8 @@ help_message () {
 ########################               LOADING IN THE PARAMETERS                ########################
 ########################################################################################################
 
-config_file=$(which config-metahit)
-source $config_file
+# Define the path to MEGAHIT
+MEGAHIT_PATH="./megahit/src/megahit"
 
 # default parameters
 mem=24; threads=1; out="false"; reads_1="false"; reads_2="false"; min_len=1000
@@ -84,7 +84,7 @@ fi
 if [ "$megahit_assemble" = true ]; then
     echo "ASSEMBLING WITH MEGAHIT"
     mkdir -p ${out}/megahit.tmp
-    megahit -1 $reads_1 -2 $reads_2 -o ${out}/megahit --min-contig-len 1000 --k-min 21 --k-max 141 --k-step 12 --merge-level 20,0.95 -t $threads -m ${mem}000000000
+    $MEGAHIT_PATH -1 $reads_1 -2 $reads_2 -o ${out}/megahit --min-contig-len 1000 --k-min 21 --k-max 141 --k-step 12 --merge-level 20,0.95 -t $threads -m ${mem}000000000
     if [ ! -f "${out}/megahit/final.contigs.fa" ]; then echo "Error: MEGAHIT assembly failed."; exit 1; fi
     rm -r ${out}/megahit.tmp
 fi
