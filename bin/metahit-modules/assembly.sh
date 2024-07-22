@@ -1,11 +1,5 @@
 #!/usr/bin/env bash
 
-#############################################################################################################
-# This script assembles metagenomic reads using metaSPAdes and MEGAHIT, with customized parameters for 
-# MEGAHIT. The resulting assemblies are combined, filtered, and quality-checked with QUAST.
-#
-# For questions or suggestions, contact me at [your email].
-#############################################################################################################
 
 help_message () {
     echo ""
