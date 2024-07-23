@@ -22,6 +22,7 @@ help_message () {
 ########################################################################################################
 
 # Define the path to MEGAHIT
+# CHANGE THE PATH TO YOUR REAL MEGAHIT 
 MEGAHIT_PATH="./megahit/src/megahit"
 
 # default parameters
