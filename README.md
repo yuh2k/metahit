@@ -12,4 +12,4 @@
 
 ## Running
 
-For this demo version, please copy
+directly run demo.sh
