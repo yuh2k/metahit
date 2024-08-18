@@ -80,7 +80,7 @@ fi
 if [[ ! -s ${out}/final_assembly.fasta ]]; then echo "Error: Final assembly failed."; exit 1; fi
 
 echo "RUNNING ASSEMBLY QC WITH QUAST"
-quast -t $threads -o ${out}/QUAST_out -m 500 ${out}/final_assembly.fasta
+quast.py -t $threads -o ${out}/QUAST_out -m 500 ${out}/final_assembly.fasta
 cp ${out}/QUAST_out/report.html ${out}/assembly_report.html
 
 if [[ ! -s ${out}/assembly_report.html ]]; then echo "Error: QUAST analysis failed."; exit 1; fi

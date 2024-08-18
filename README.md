@@ -5,5 +5,7 @@
 - FastQC: https://www.bioinformatics.babraham.ac.uk/projects/fastqc/
 - BBTools: https://jgi.doe.gov/data-and-tools/software-tools/bbtools/
 - Samtools: https://www.htslib.org/
-- Quast
-- Java Runtime
+- Quast: https://github.com/ablab/quast
+- Java Runtime: https://openjdk.org/
+- BWA: https://github.com/lh3/bwa
+- Samtools: http://www.htslib.org/
