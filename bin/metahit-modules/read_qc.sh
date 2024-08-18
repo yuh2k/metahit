@@ -110,8 +110,14 @@ if [ "$trim" = true ]; then
     ########################                 RUNNING BBDuk FOR TRIMMING                    ########################
     ########################################################################################################
     echo "Running BBDuk for trimming"
-    /Users/bach/Downloads/bbmap/bbduk.sh -Xmx16g in1=$reads_1 in2=$reads_2 out1=${out}/trimmed_1.fastq out2=${out}/trimmed_2.fastq ref=/Users/bach/Downloads/bbmap/resources/adapters.fa ktrim=r k=23 mink=11 hdist=1 tpe tbo qtrim=rl trimq=10 minlen=50
-    
+    bbduk.sh -Xmx16g \
+        in1=$reads_1 \
+        in2=$reads_2 \
+        out1=${out}/trimmed_1.fastq \
+        out2=${out}/trimmed_2.fastq \
+        ref=/home/linuxbrew/.linuxbrew/Homebrew/Cellar/bbtools/39.08/libexec/resources/adapters.fa \
+        ktrim=r k=23 mink=11 hdist=1 tpe tbo qtrim=rl trimq=10 minlen=50
+
     if [ $? -ne 0 ]; then 
         echo "Something went wrong with BBDuk trimming. Exiting."
         exit 1
@@ -121,23 +127,6 @@ if [ "$trim" = true ]; then
     reads_1=${out}/trimmed_1.fastq
     reads_2=${out}/trimmed_2.fastq
 fi
-
-if [ "$bbduk" = true ]; then
-    ########################################################################################################
-    ########################               REMOVING HOST SEQUENCES                  ########################
-    ########################################################################################################
-    echo "Removing host sequences with BBDuk"
-    /Users/bach/Downloads/bbmap/bbduk.sh -Xmx16g in1=$reads_1 in2=$reads_2 out1=${out}/cleaned_1.fastq out2=${out}/cleaned_2.fastq ref=/Users/bach/Downloads/bbmap/resources/hg38.fa k=31 hdist=1
-    
-    if [ $? -ne 0 ]; then 
-        echo "Something went wrong with BBDuk host removal. Exiting."
-        exit 1
-    fi
-    echo "Cleaned reads saved to: ${out}/cleaned_1.fastq and ${out}/cleaned_2.fastq"
-    
-    reads_1=${out}/cleaned_1.fastq
-    reads_2=${out}/cleaned_2.fastq
-fi    
 
 # Move final clean reads to their respective files
 mv $reads_1 ${out}/final_pure_reads_1.fastq

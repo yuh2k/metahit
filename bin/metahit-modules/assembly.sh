@@ -1,5 +1,4 @@
-
-#!/usr/bin/env zsh
+#!/usr/bin/env bash
 
 help_message () {
     echo ""
@@ -16,6 +15,7 @@ help_message () {
     echo "    --metaspades    assemble with metaspades instead of megahit"
     echo ""
 }
+SOFT="bin/metahit-scripts"
 
 # default parameters
 mem=24; threads=1; out="false"; reads_1="false"; reads_2="false"; min_len=1000
@@ -60,7 +60,7 @@ fi
 if [ "$megahit_assemble" = true ]; then
     echo "ASSEMBLING WITH MEGAHIT"
     mkdir -p ${out}/megahit.tmp
-    megahit -1 $reads_1 -2 $reads_2 -o ${out}/megahit --min-contig-len $min_len -t $threads -m ${mem}000000000
+    megahit -1 $reads_1 -2 $reads_2 -o ${out}/megahit --min-contig-len 1000 --k-min 21 --k-max 141 --k-step 12 --merge-level 20,0.95 -t $threads -m ${mem}000000000
     if [ ! -f "${out}/megahit/final.contigs.fa" ]; then echo "Error: MEGAHIT assembly failed."; exit 1; fi
     rm -r ${out}/megahit.tmp
 fi
@@ -86,5 +86,3 @@ cp ${out}/QUAST_out/report.html ${out}/assembly_report.html
 if [[ ! -s ${out}/assembly_report.html ]]; then echo "Error: QUAST analysis failed."; exit 1; fi
 
 echo "ASSEMBLY PIPELINE COMPLETED SUCCESSFULLY!"
-
-

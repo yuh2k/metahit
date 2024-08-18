@@ -12,7 +12,7 @@ echo "Usage: metahit alignment -f final_assembly.fasta -1 HIC_1_dedup.fastq.gz -
 # Parameters
 fasta="final_assembly.fasta"
 reads_1="HIC_1_dedup.fastq.gz"
-reads_2="HIC_2_dedup.fastq.gz"
+reads_2="HIC_2_dedup.fastq.gz"阿
 output_dir=".output/final/"
 
 # Run BWA MEM to align reads
