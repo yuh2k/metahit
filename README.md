@@ -9,3 +9,7 @@
 - Java Runtime: https://openjdk.org/
 - BWA: https://github.com/lh3/bwa
 - Samtools: http://www.htslib.org/
+
+## Running
+
+For this demo version, please copy
