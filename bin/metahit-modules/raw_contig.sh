@@ -38,4 +38,4 @@ echo "FASTA file: $FASTA_FILE"
 echo "Output directory: $OUTPUT_DIR"
 
 # Run the downstream.py script with the provided arguments
-python bin/metahit-scripts/downstream.py --bam "$BAM_FILE" --fasta "$FASTA_FILE" --out "$OUTPUT_DIR"
+python bin/metahit-scripts/raw_contig.py --bam "$BAM_FILE" --fasta "$FASTA_FILE" --out "$OUTPUT_DIR"
