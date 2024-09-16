@@ -1,4 +1,5 @@
 #!/bin/bash
+# /home/hh/anaconda3/bin/python
 
 # Help function to display usage
 function show_help {
@@ -37,5 +38,6 @@ echo "BAM file: $BAM_FILE"
 echo "FASTA file: $FASTA_FILE"
 echo "Output directory: $OUTPUT_DIR"
 
-# Run the downstream.py script with the provided arguments
-python bin/metahit-scripts/raw_contig.py --bam "$BAM_FILE" --fasta "$FASTA_FILE" --out "$OUTPUT_DIR"
+echo "Starting script"
+python ./bin/metahit-scripts/raw_contig.py --bam "$BAM_FILE" --fasta "$FASTA_FILE" --out "$OUTPUT_DIR"
+echo "Script completed"
