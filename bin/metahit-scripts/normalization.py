@@ -317,6 +317,60 @@ class Normalization:
             print(f"Error during bin3C normalization: {e}")
             return None
 
+    def metator(self, contig_file, contact_matrix_file, output_path):
+        """
+        Perform MetaTOR normalization.
+        """
+        try:
+            os.makedirs(output_path, exist_ok=True)
+
+            # Load contig information
+            names = ['contig_name', 'site', 'length', 'covcc', 'signal']
+            df = pd.read_csv(
+                contig_file,
+                header=None,
+                names=names,
+                dtype={'site': float, 'length': float, 'covcc': float, 'signal': float}
+            )
+
+            # Handle missing values
+            if df[['covcc']].isnull().values.any():
+                print("Warning: Missing coverage values found.")
+                df = df.dropna(subset=['covcc'])
+
+            # Load raw contact matrix
+            contact_matrix = load_npz(contact_matrix_file).tocoo()
+
+            # Get coverage values
+            coverage = df['covcc'].values
+            epsilon = 1e-10
+            coverage[coverage == 0] = epsilon  # Prevent division by zero
+
+            # Normalize contact values
+            normalized_data = []
+            for i, j, v in zip(contact_matrix.row, contact_matrix.col, contact_matrix.data):
+                cov_i = coverage[i]
+                cov_j = coverage[j]
+                norm_factor = np.sqrt(cov_i * cov_j)
+                normalized_value = v / norm_factor
+                normalized_data.append(normalized_value)
+
+            # Create normalized contact matrix
+            normalized_contact_matrix = coo_matrix(
+                (normalized_data, (contact_matrix.row, contact_matrix.col)),
+                shape=contact_matrix.shape
+            )
+
+            # Save normalized contact matrix
+            metator_matrix_file = os.path.join(output_path, 'metator_contact_matrix.npz')
+            save_npz(metator_matrix_file, normalized_contact_matrix)
+            print(f"MetaTOR normalized contact matrix saved to {metator_matrix_file}")
+
+            return normalized_contact_matrix
+        except Exception as e:
+            print(f"Error during MetaTOR normalization: {e}")
+            return None
+        
     def _bisto_seq(self, matrix, max_iter=1000, tol=1e-6):
         """
         Convert matrix to bistochastic using Sinkhorn-Knopp algorithm.
@@ -433,3 +487,20 @@ if __name__ == "__main__":
             print("bin3C normalization failed.")
     else:
         print("Skipping bin3C normalization due to previous failure.")
+
+    # Test MetaTOR normalization
+    if raw_cm is not None:
+        metator_output_path = os.path.join(output_path, 'metator')
+
+        metator_result = normalizer.metator(
+            contig_file=contig_file,
+            contact_matrix_file=contact_matrix_file,
+            output_path=metator_output_path
+        )
+
+        if metator_result is not None:
+            print("MetaTOR normalization completed successfully.")
+        else:
+            print("MetaTOR normalization failed.")
+    else:
+        print("Skipping MetaTOR normalization due to previous failure.")
