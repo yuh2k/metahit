@@ -1,4 +1,3 @@
-# MetaHit
 ![metahit-removebg-preview](https://github.com/user-attachments/assets/205507ac-2766-470e-9c6d-2ddebc279f74)
 
 
