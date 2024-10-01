@@ -4,12 +4,13 @@ Version: 5.2.0, 2723558f
 
 System information:
   OS: Linux-6.8.0-40-generic-x86_64-with-glibc2.39 (linux_64)
-  Python version: 3.12.4
+  Python version: 3.9.19
   CPUs number: 14
 
-Started: 2024-08-18 02:14:05
+Started: 2024-10-01 00:40:48
 
 Logging to /home/hh/github/metahit/output/assembly/QUAST_out/quast.log
+NOTICE: Output directory already exists and looks like a QUAST output dir. Existing results can be reused (e.g. previously generated alignments)!
 
 CWD: /home/hh/github/metahit
 Main parameters: 
@@ -20,12 +21,12 @@ Contigs:
   Pre-processing...
   output/assembly/final_assembly.fasta ==> final_assembly
 
-2024-08-18 02:14:05
+2024-10-01 00:40:49
 Running Basic statistics processor...
   Contig files: 
     final_assembly
   Calculating N50 and L50...
-    final_assembly, N50 = 5696, L50 = 16, auN = 6014.8, Total length = 273929, GC % = 47.82, # N's per 100 kbp =  0.00
+    final_assembly, N50 = 5372, L50 = 17, auN = 5826.7, Total length = 276662, GC % = 47.87, # N's per 100 kbp =  0.00
   Drawing Nx plot...
     saved to /home/hh/github/metahit/output/assembly/QUAST_out/basic_stats/Nx_plot.pdf
   Drawing cumulative plot...
@@ -34,22 +35,22 @@ Running Basic statistics processor...
     saved to /home/hh/github/metahit/output/assembly/QUAST_out/basic_stats/GC_content_plot.pdf
   Drawing final_assembly GC content plot...
     saved to /home/hh/github/metahit/output/assembly/QUAST_out/basic_stats/final_assembly_GC_content_plot.pdf
-  Drawing Coverage histogram (bin size: 21x)...
+  Drawing Coverage histogram (bin size: 22x)...
     saved to /home/hh/github/metahit/output/assembly/QUAST_out/basic_stats/coverage_histogram.pdf
-  Drawing final_assembly coverage histogram (bin size: 21x)...
+  Drawing final_assembly coverage histogram (bin size: 22x)...
     saved to /home/hh/github/metahit/output/assembly/QUAST_out/basic_stats/final_assembly_coverage_histogram.pdf
 Done.
 
 NOTICE: Genes are not predicted by default. Use --gene-finding or --glimmer option to enable it.
 
-2024-08-18 02:14:05
+2024-10-01 00:40:49
 Creating large visual summaries...
 This may take a while: press Ctrl-C to skip this step..
   1 of 2: Creating PDF with all tables and plots...
   2 of 2: Creating Icarus viewers...
 Done
 
-2024-08-18 02:14:06
+2024-10-01 00:40:49
 RESULTS:
   Text versions of total report are saved to /home/hh/github/metahit/output/assembly/QUAST_out/report.txt, report.tsv, and report.tex
   Text versions of transposed total report are saved to /home/hh/github/metahit/output/assembly/QUAST_out/transposed_report.txt, transposed_report.tsv, and transposed_report.tex
@@ -58,8 +59,8 @@ RESULTS:
   Icarus (contig browser) is saved to /home/hh/github/metahit/output/assembly/QUAST_out/icarus.html
   Log is saved to /home/hh/github/metahit/output/assembly/QUAST_out/quast.log
 
-Finished: 2024-08-18 02:14:06
-Elapsed time: 0:00:01.119463
-NOTICEs: 1; WARNINGs: 0; non-fatal ERRORs: 0
+Finished: 2024-10-01 00:40:49
+Elapsed time: 0:00:01.070606
+NOTICEs: 2; WARNINGs: 0; non-fatal ERRORs: 0
 
 Thank you for using QUAST!

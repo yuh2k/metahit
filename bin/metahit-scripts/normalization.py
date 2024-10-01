@@ -1,5 +1,8 @@
+#!/usr/bin/env python3
+
 import os
 import sys
+import argparse
 import numpy as np
 import pandas as pd
 from scipy.sparse import save_npz, load_npz, coo_matrix, diags
@@ -7,7 +10,8 @@ import statsmodels.api as sm
 from collections import namedtuple
 
 # Ensure the script directory is in sys.path
-sys.path.append('bin/metahit-scripts')
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(script_dir, 'bin/metahit-scripts'))
 
 from raw_contact import ContactMatrix as RawContactMatrix
 from normcc import normcc_local
@@ -374,7 +378,7 @@ class Normalization:
     def denoise(self, contact_matrix_file, output_path, p=0.1, discard_file=None):
         """
         Remove spurious Hi-C contacts by discarding the lowest p percent of normalized contacts.
-        Saves the denoised matrix as 'Denoised_Normalized_Matrix.npz'.
+        Saves the denoised matrix as 'denoised_normalized_matrix.npz'.
         
         Parameters:
         - contact_matrix_file: Path to the normalized contact matrix (.npz).
@@ -481,139 +485,140 @@ class Normalization:
         bistochastic_matrix = D_r.dot(A).dot(D_c).tocoo()
 
         return bistochastic_matrix
-if __name__ == "__main__":
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Normalization tool for MetaHit pipeline."
+    )
+    subparsers = parser.add_subparsers(dest='command', help='Available normalization commands')
+
+    # Subparser for raw normalization
+    parser_raw = subparsers.add_parser('raw', help='Perform raw normalization')
+    parser_raw.add_argument('-b', '--bam_file', required=True, help='Path to BAM file')
+    parser_raw.add_argument('-f', '--fasta_file', required=True, help='Path to FASTA file')
+    parser_raw.add_argument('-e', '--enzymes', nargs='+', required=True, help='List of enzymes')
+    parser_raw.add_argument('-o', '--output_path', required=True, help='Output directory')
+    parser_raw.add_argument('--min_mapq', type=int, default=30, help='Minimum MAPQ')
+    parser_raw.add_argument('--min_len', type=int, default=1000, help='Minimum length')
+    parser_raw.add_argument('--min_match', type=int, default=30, help='Minimum match')
+    parser_raw.add_argument('--min_signal', type=int, default=2, help='Minimum signal')
+
+    # Subparser for normcc_contact normalization
+    parser_normcc = subparsers.add_parser('normcc_contact', help='Perform normcc_contact normalization')
+    parser_normcc.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
+    parser_normcc.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
+    parser_normcc.add_argument('-o', '--output_path', required=True, help='Output directory')
+
+    # Subparser for HiCzin normalization
+    parser_hiczin = subparsers.add_parser('hiczin', help='Perform HiCzin normalization')
+    parser_hiczin.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
+    parser_hiczin.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
+    parser_hiczin.add_argument('-o', '--output_path', required=True, help='Output directory')
+    parser_hiczin.add_argument('--min_signal', type=int, default=2, help='Minimum signal')
+
+    # Subparser for bin3c normalization
+    parser_bin3c = subparsers.add_parser('bin3c', help='Perform bin3C normalization')
+    parser_bin3c.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
+    parser_bin3c.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
+    parser_bin3c.add_argument('-o', '--output_path', required=True, help='Output directory')
+    parser_bin3c.add_argument('--max_iter', type=int, default=1000, help='Maximum iterations for Sinkhorn-Knopp')
+    parser_bin3c.add_argument('--tol', type=float, default=1e-6, help='Tolerance for convergence')
+
+    # Subparser for MetaTOR normalization
+    parser_metator = subparsers.add_parser('metator', help='Perform MetaTOR normalization')
+    parser_metator.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
+    parser_metator.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
+    parser_metator.add_argument('-o', '--output_path', required=True, help='Output directory')
+
+    # Subparser for denoising
+    parser_denoise = subparsers.add_parser('denoise', help='Perform denoising on a contact matrix')
+    parser_denoise.add_argument('-m', '--contact_matrix_file', required=True, help='Path to normalized_contact_matrix.npz')
+    parser_denoise.add_argument('-o', '--output_path', required=True, help='Output directory')
+    parser_denoise.add_argument('-p', '--p', type=float, default=0.1, help='Fraction of contacts to discard')
+    parser_denoise.add_argument('--discard_file', help='Path to discard contacts CSV file')
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
     normalizer = Normalization()
 
-    bam_file = "./output/alignment/MAP_SORTED.bam"
-    fasta_file = "./output/assembly/final_assembly.fasta"
-    enzymes = ["EcoRI", "HindIII"]
-    output_path = "./output/normalization"
-
-    # Test raw normalization
-    raw_output_path = os.path.join(output_path, 'raw')
-    raw_cm = normalizer.raw(
-        bam_file=bam_file,
-        fasta_file=fasta_file,
-        enzymes=enzymes,
-        output_path=raw_output_path
-    )
-
-    if raw_cm is not None:
-        print("Raw normalization completed successfully.")
-    else:
-        print("Raw normalization failed.")
-
-    # Test normcc_contact normalization
-    if raw_cm is not None:
-        contig_file = os.path.join(raw_output_path, 'contig_info.csv')
-        contact_matrix_file = os.path.join(raw_output_path, 'contact_matrix.npz')
-        normcc_output_path = os.path.join(output_path, 'normcc')
-
-        norm_result = normalizer.normcc_contact(
-            contig_file=contig_file,
-            contact_matrix_file=contact_matrix_file,
-            output_path=normcc_output_path
+    if args.command == 'raw':
+        cm = normalizer.raw(
+            bam_file=args.bam_file,
+            fasta_file=args.fasta_file,
+            enzymes=args.enzymes,
+            output_path=args.output_path,
+            min_mapq=args.min_mapq,
+            min_len=args.min_len,
+            min_match=args.min_match,
+            min_signal=args.min_signal
         )
+        if cm is not None:
+            print("Raw normalization completed successfully.")
+        else:
+            print("Raw normalization failed.")
 
+    elif args.command == 'normcc_contact':
+        norm_result = normalizer.normcc_contact(
+            contig_file=args.contig_file,
+            contact_matrix_file=args.contact_matrix_file,
+            output_path=args.output_path
+        )
         if norm_result is not None:
             print("normCC normalization completed successfully.")
         else:
             print("normCC normalization failed.")
-    else:
-        print("Skipping normCC normalization due to previous failure.")
 
-    # Test HiCzin normalization
-    if raw_cm is not None:
-        hiczin_output_path = os.path.join(output_path, 'hiczin')
-
+    elif args.command == 'hiczin':
         hiczin_map = normalizer.hiczin(
-            contig_file=contig_file,
-            contact_matrix_file=contact_matrix_file,
-            output_path=hiczin_output_path,
-            min_signal=2  # Adjust as needed
+            contig_file=args.contig_file,
+            contact_matrix_file=args.contact_matrix_file,
+            output_path=args.output_path,
+            min_signal=args.min_signal
         )
-
         if hiczin_map is not None:
             print("HiCzin normalization completed successfully.")
         else:
             print("HiCzin normalization failed.")
-    else:
-        print("Skipping HiCzin normalization due to previous failure.")
 
-    # Test bin3c normalization
-    if raw_cm is not None:
-        bin3c_output_path = os.path.join(output_path, 'bin3c')
-
-        bin3c_result = normalizer.bin3c(
-            contig_file=contig_file,
-            contact_matrix_file=contact_matrix_file,
-            output_path=bin3c_output_path
+    elif args.command == 'bin3c':
+        bistochastic_matrix = normalizer.bin3c(
+            contig_file=args.contig_file,
+            contact_matrix_file=args.contact_matrix_file,
+            output_path=args.output_path,
+            max_iter=args.max_iter,
+            tol=args.tol
         )
-
-        if bin3c_result is not None:
+        if bistochastic_matrix is not None:
             print("bin3C normalization completed successfully.")
         else:
             print("bin3C normalization failed.")
-    else:
-        print("Skipping bin3C normalization due to previous failure.")
 
-    # Test MetaTOR normalization
-    if raw_cm is not None:
-        metator_output_path = os.path.join(output_path, 'metator')
-
-        metator_result = normalizer.metator(
-            contig_file=contig_file,
-            contact_matrix_file=contact_matrix_file,
-            output_path=metator_output_path
+    elif args.command == 'metator':
+        metator_matrix = normalizer.metator(
+            contig_file=args.contig_file,
+            contact_matrix_file=args.contact_matrix_file,
+            output_path=args.output_path
         )
-
-        if metator_result is not None:
+        if metator_matrix is not None:
             print("MetaTOR normalization completed successfully.")
         else:
             print("MetaTOR normalization failed.")
-    else:
-        print("Skipping MetaTOR normalization due to previous failure.")
 
-    # Apply denoising to each normalization method
-    normalization_methods = {
-        'raw': {
-            'contact_matrix_file': os.path.join(raw_output_path, 'contact_matrix.npz'),
-            'denoise_output_path': os.path.join(raw_output_path, 'denoise')
-        },
-        'normcc': {
-            'contact_matrix_file': os.path.join(normcc_output_path, 'normalized_contact_matrix.npz'),
-            'denoise_output_path': os.path.join(normcc_output_path, 'denoise')
-        },
-        'hiczin': {
-            'contact_matrix_file': os.path.join(hiczin_output_path, 'hiczin_contact_matrix.npz'),
-            'denoise_output_path': os.path.join(hiczin_output_path, 'denoise')
-        },
-        'bin3c': {
-            'contact_matrix_file': os.path.join(bin3c_output_path, 'bin3c_contact_matrix.npz'),
-            'denoise_output_path': os.path.join(bin3c_output_path, 'denoise')
-        },
-        'metator': {
-            'contact_matrix_file': os.path.join(metator_output_path, 'metator_contact_matrix.npz'),
-            'denoise_output_path': os.path.join(metator_output_path, 'denoise')
-        }
-    }
-
-    for method, paths in normalization_methods.items():
-        cm_file = paths['contact_matrix_file']
-        denoise_path = paths['denoise_output_path']
-
-        if os.path.exists(cm_file):
-            print(f"Applying denoising to {method} normalization.")
-            denoised_matrix = normalizer.denoise(
-                contact_matrix_file=cm_file,
-                output_path=denoise_path,
-                p=0.1,  # Default to removing 10% lowest contacts
-                discard_file=None  # Provide a file path if you have specific contacts to discard
-            )
-
-            if denoised_matrix is not None:
-                print(f"Denoising for {method} normalization completed successfully.")
-            else:
-                print(f"Denoising for {method} normalization failed.")
+    elif args.command == 'denoise':
+        denoised_matrix = normalizer.denoise(
+            contact_matrix_file=args.contact_matrix_file,
+            output_path=args.output_path,
+            p=args.p,
+            discard_file=args.discard_file
+        )
+        if denoised_matrix is not None:
+            print("Denoising completed successfully.")
         else:
-            print(f"Contact matrix file for {method} normalization does not exist. Skipping denoising.")
+            print("Denoising failed.")
+
+if __name__ == "__main__":
+    main()
