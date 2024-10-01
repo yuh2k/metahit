@@ -10,6 +10,8 @@
 - BWA: https://github.com/lh3/bwa
 - Samtools: http://www.htslib.org/
 
-## Running
+## Setup
 
-directly run demo.sh
+Run `conda env create -f env.yaml` in root directory
+
+Then, directly run `bash demo.sh` and the pipeline will be triggered,
