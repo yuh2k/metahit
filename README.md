@@ -5,4 +5,4 @@
 
 Run `conda env create -f env.yaml` in root directory
 
-Then, directly run `bash demo.sh` and the pipeline will be triggered.
+Then, in the conda environment, directly run `bash demo.sh` and the pipeline will be triggered.
