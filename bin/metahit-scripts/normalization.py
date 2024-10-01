@@ -371,6 +371,76 @@ class Normalization:
             print(f"Error during MetaTOR normalization: {e}")
             return None
         
+    def denoise(self, contact_matrix_file, output_path, p=0.1, discard_file=None):
+        """
+        Remove spurious Hi-C contacts by discarding the lowest p percent of normalized contacts.
+        Saves the denoised matrix as 'Denoised_Normalized_Matrix.npz'.
+        
+        Parameters:
+        - contact_matrix_file: Path to the normalized contact matrix (.npz).
+        - output_path: Directory to save the denoised matrix.
+        - p: Fraction of contacts to discard (default is 0.1 for 10%).
+        - discard_file: Optional CSV file containing specific contacts to discard.
+        """
+        try:
+            os.makedirs(output_path, exist_ok=True)
+            denoised_matrix_file = os.path.join(output_path, 'denoised_normalized_matrix.npz')
+
+            # Load contact matrix
+            contact_matrix = load_npz(contact_matrix_file).tocoo()
+            print(f"Loaded contact matrix from {contact_matrix_file}")
+            print(f"Contact matrix shape: {contact_matrix.shape}")
+            print(f"Number of non-zero entries: {contact_matrix.nnz}")
+
+            if contact_matrix.nnz == 0:
+                print("Warning: The contact matrix is empty. Skipping denoising.")
+                # Save an empty matrix
+                denoised_contact_matrix = coo_matrix(contact_matrix.shape)
+                save_npz(denoised_matrix_file, denoised_contact_matrix)
+                print(f"Empty denoised contact matrix saved to {denoised_matrix_file}")
+                return denoised_contact_matrix
+
+            if discard_file:
+                # Load discard contacts from file
+                discard_df = pd.read_csv(discard_file)
+                # Assuming discard_df has columns 'row' and 'col'
+                rows = discard_df['row'].values
+                cols = discard_df['col'].values
+                mask = ~((contact_matrix.row.astype(int).isin(rows)) & (contact_matrix.col.astype(int).isin(cols)))
+                denoised_contact_matrix = coo_matrix(
+                    (contact_matrix.data[mask], (contact_matrix.row[mask], contact_matrix.col[mask])),
+                    shape=contact_matrix.shape
+                )
+            else:
+                # Calculate threshold to discard lowest p percent
+                if p <= 0 or p >= 1:
+                    print("Error: Parameter 'p' must be between 0 and 1.")
+                    return None
+
+                threshold = np.percentile(contact_matrix.data, p * 100)
+                print(f"Denoising threshold (p={p*100}th percentile): {threshold}")
+                mask = contact_matrix.data > threshold
+
+                if not np.any(mask):
+                    print("Warning: No contacts exceed the threshold. Denoised matrix will be empty.")
+                    denoised_contact_matrix = coo_matrix(contact_matrix.shape)
+                else:
+                    denoised_contact_matrix = coo_matrix(
+                        (contact_matrix.data[mask], (contact_matrix.row[mask], contact_matrix.col[mask])),
+                        shape=contact_matrix.shape
+                    )
+
+            # Save denoised contact matrix
+            save_npz(denoised_matrix_file, denoised_contact_matrix)
+            print(f"Denoised normalized contact matrix saved to {denoised_matrix_file}")
+            print(f"Denoised contact matrix shape: {denoised_contact_matrix.shape}")
+            print(f"Number of non-zero entries after denoising: {denoised_contact_matrix.nnz}")
+
+            return denoised_contact_matrix
+        except Exception as e:
+            print(f"Error during denoising normalization: {e}")
+            return None
+        
     def _bisto_seq(self, matrix, max_iter=1000, tol=1e-6):
         """
         Convert matrix to bistochastic using Sinkhorn-Knopp algorithm.
@@ -411,7 +481,6 @@ class Normalization:
         bistochastic_matrix = D_r.dot(A).dot(D_c).tocoo()
 
         return bistochastic_matrix
-
 if __name__ == "__main__":
     normalizer = Normalization()
 
@@ -504,3 +573,47 @@ if __name__ == "__main__":
             print("MetaTOR normalization failed.")
     else:
         print("Skipping MetaTOR normalization due to previous failure.")
+
+    # Apply denoising to each normalization method
+    normalization_methods = {
+        'raw': {
+            'contact_matrix_file': os.path.join(raw_output_path, 'contact_matrix.npz'),
+            'denoise_output_path': os.path.join(raw_output_path, 'denoise')
+        },
+        'normcc': {
+            'contact_matrix_file': os.path.join(normcc_output_path, 'normalized_contact_matrix.npz'),
+            'denoise_output_path': os.path.join(normcc_output_path, 'denoise')
+        },
+        'hiczin': {
+            'contact_matrix_file': os.path.join(hiczin_output_path, 'hiczin_contact_matrix.npz'),
+            'denoise_output_path': os.path.join(hiczin_output_path, 'denoise')
+        },
+        'bin3c': {
+            'contact_matrix_file': os.path.join(bin3c_output_path, 'bin3c_contact_matrix.npz'),
+            'denoise_output_path': os.path.join(bin3c_output_path, 'denoise')
+        },
+        'metator': {
+            'contact_matrix_file': os.path.join(metator_output_path, 'metator_contact_matrix.npz'),
+            'denoise_output_path': os.path.join(metator_output_path, 'denoise')
+        }
+    }
+
+    for method, paths in normalization_methods.items():
+        cm_file = paths['contact_matrix_file']
+        denoise_path = paths['denoise_output_path']
+
+        if os.path.exists(cm_file):
+            print(f"Applying denoising to {method} normalization.")
+            denoised_matrix = normalizer.denoise(
+                contact_matrix_file=cm_file,
+                output_path=denoise_path,
+                p=0.1,  # Default to removing 10% lowest contacts
+                discard_file=None  # Provide a file path if you have specific contacts to discard
+            )
+
+            if denoised_matrix is not None:
+                print(f"Denoising for {method} normalization completed successfully.")
+            else:
+                print(f"Denoising for {method} normalization failed.")
+        else:
+            print(f"Contact matrix file for {method} normalization does not exist. Skipping denoising.")
