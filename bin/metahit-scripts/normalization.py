@@ -43,7 +43,7 @@ class Normalization:
             )
 
             # Save contact matrix
-            matrix_file = os.path.join(output_path, 'contact_matrix.npz')
+            matrix_file = os.path.join(output_path, 'contact_matrix.npz') #Change name to raw_contact matrix.npz
             save_npz(matrix_file, cm.seq_map)
             print(f"Contact matrix saved to {matrix_file}")
 
@@ -51,7 +51,7 @@ class Normalization:
             contig_info_file = os.path.join(output_path, 'contig_info.csv')
             with open(contig_info_file, 'w') as f:
                 for i, seq in enumerate(cm.seq_info):
-                    f.write(f"{seq.name},{seq.sites},{seq.length},{seq.covcc},{cm.row_sum[i]}\n")
+                    f.write(f"{seq.name},{seq.sites},{seq.length}\n") #covcc and signal columns are only used for NormCC normalization and are not useful as contig information or features
             print(f"Contig info saved to {contig_info_file}")
 
             print(f"Raw normalization result saved to {output_path}/contig_info.csv")
@@ -68,7 +68,7 @@ class Normalization:
             os.makedirs(output_path, exist_ok=True)
 
             coefficients_file = os.path.join(output_path, 'normcc_coefficients.csv')
-
+            # Since we change the contig_info file, we need to read the raw contact matrix first to generate covcc (i.e. diagonal entries) and signal (i.e. row sum)
             # Execute normcc_local to obtain normalization coefficients
             norm_result = normcc_local(contig_file, output_file=coefficients_file)
 
