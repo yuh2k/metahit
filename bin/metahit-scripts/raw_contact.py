@@ -184,14 +184,7 @@ class ContactMatrix:
 
         assert self.seq_map.shape[0] == len(self.seq_info), 'Filter error'
 
-        # Change the diagonal entries of Hi-C matrix to zero
-        self.seq_map = self.seq_map.tolil()
-        self.seq_map.setdiag(0)
 
-        # Compute the Hi-C signals for each contig
-        self.seq_map = self.seq_map.tocsr()
-        self.row_sum = np.matrix.tolist(self.seq_map.sum(axis=0))[0]
-        self._write_contig_info()
 
     def _bin_map(self, bam):
         import tqdm
@@ -283,21 +276,7 @@ class ContactMatrix:
             rev_idx[fv] = n
         return rev_idx
 
-    def _write_contig_info(self):
-        print("Writing")
-        tmp_contig_file = os.path.join(self.path, 'tmp', 'contig_info.csv')
-        final_contig_file = os.path.join(self.path, 'contig_info.csv')
 
-        logger.info(f"Writing contig info to {tmp_contig_file} and {final_contig_file}")
-
-        with open(tmp_contig_file, 'w') as out:
-            for i, seq in enumerate(self.seq_info):
-                out.write(f"{seq.name},{seq.sites},{seq.length},{seq.covcc},{self.row_sum[i]}\n")
-
-        with open(final_contig_file, 'w') as out:
-            out.write('Contig name,Number of restriction sites,Contig length\n')
-            for seq in self.seq_info:
-                out.write(f"{seq.name},{seq.sites},{seq.length}\n")
 
     def max_offdiag(self):
         _m = self.seq_map
