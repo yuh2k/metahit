@@ -1,3 +1,10 @@
+"""
+Megahit cannot be detected in the environment
+metaspades can work
+megahit parameters as options
+metaspades with option -k 21,33,55,61 hint must be odd and smaller than 128
+not use relative path
+"""
 #!/usr/bin/env bash
 
 help_message () {
@@ -52,25 +59,20 @@ mkdir -p $out || { echo "Error: Cannot create output directory."; exit 1; }
 if [ "$metaspades_assemble" = true ]; then
     echo "ASSEMBLING WITH METASPADES"
     mkdir -p ${out}/metaspades.tmp
-    metaspades.py --tmp-dir ${out}/metaspades.tmp -t $threads -m $mem -o ${out}/metaspades -1 $reads_1 -2 $reads_2
+    metaspades.py --tmp-dir ${out}/metaspades.tmp -k 21,33,55,61 -t $threads -m $mem -o ${out}/metaspades -1 $reads_1 -2 $reads_2
+    if [ -d "${out}/metaspades.tmp" ]; then rm -r ${out}/metaspades.tmp; fi
     if [ ! -f "${out}/metaspades/scaffolds.fasta" ]; then echo "Error: metaSPAdes assembly failed."; exit 1; fi
-    rm -r ${out}/metaspades.tmp
 fi
 
 if [ "$megahit_assemble" = true ]; then
     echo "ASSEMBLING WITH MEGAHIT"
-    mkdir -p ${out}/megahit.tmp
     megahit -1 $reads_1 -2 $reads_2 -o ${out}/megahit --min-contig-len 1000 --k-min 21 --k-max 141 --k-step 12 --merge-level 20,0.95 -t $threads -m ${mem}000000000
     if [ ! -f "${out}/megahit/final.contigs.fa" ]; then echo "Error: MEGAHIT assembly failed."; exit 1; fi
-    rm -r ${out}/megahit.tmp
 fi
 
 if [ "$megahit_assemble" = true ] && [ "$metaspades_assemble" = true ]; then
-    echo "Combining assemblies from metaspades and megahit"
-    ${SOFT}/fix_megahit_contig_naming.py ${out}/megahit/final.contigs.fa $min_len > ${out}/megahit/long.contigs.fa
-    cat ${out}/metaspades/scaffolds.fasta ${out}/megahit/long.contigs.fa > ${out}/combined_assembly.fasta
-    ${SOFT}/sort_contigs.py ${out}/combined_assembly.fasta > ${out}/final_assembly.fasta
-    rm ${out}/combined_assembly.fasta
+    ${SOFT}/fix_megahit_contig_naming.py ${out}/megahit/final.contigs.fa $min_len > ${out}/megahit_final_assembly.fasta
+    ${SOFT}/rm_short_contigs.py $min_len ${out}/metaspades/scaffolds.fasta > ${out}/metaspades_final_assembly.fasta
 elif [ "$metaspades_assemble" = true ]; then
     ${SOFT}/rm_short_contigs.py $min_len ${out}/metaspades/scaffolds.fasta > ${out}/final_assembly.fasta
 elif [ "$megahit_assemble" = true ]; then 
