@@ -1,3 +1,11 @@
+"""
+bbduk procedure is not complete
+remove unused parameters like host/remove human sequences
+all paramters in bbduk need to be options
+ref=/home/linuxbrew/.linuxbrew/Homebrew/Cellar/bbtools/39.08/libexec/resources/adapters.fa
+fastqc cannot be run with error: perl: error while loading shared libraries: libnsl.so.1: cannot open shared object file
+detect whether some files exist before removing them
+"""
 #!/usr/bin/env bash
 
 ###########################################################################################################################################################
