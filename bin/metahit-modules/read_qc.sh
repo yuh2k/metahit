@@ -1,5 +1,6 @@
 """
 bbduk procedure is not complete
+the first three steps are required/clumpy optional (default not)
 remove unused parameters like host/remove human sequences
 all paramters in bbduk need to be options
 ref=/home/linuxbrew/.linuxbrew/Homebrew/Cellar/bbtools/39.08/libexec/resources/adapters.fa
