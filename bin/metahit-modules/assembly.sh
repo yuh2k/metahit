@@ -4,6 +4,8 @@ metaspades can work
 megahit parameters as options
 metaspades with option -k 21,33,55,61 hint must be odd and smaller than 128
 not use relative path
+if --megahit --metasapdes input at the same time, run the first one
+quest.py cannot be found
 """
 #!/usr/bin/env bash
 
@@ -70,10 +72,7 @@ if [ "$megahit_assemble" = true ]; then
     if [ ! -f "${out}/megahit/final.contigs.fa" ]; then echo "Error: MEGAHIT assembly failed."; exit 1; fi
 fi
 
-if [ "$megahit_assemble" = true ] && [ "$metaspades_assemble" = true ]; then
-    ${SOFT}/fix_megahit_contig_naming.py ${out}/megahit/final.contigs.fa $min_len > ${out}/megahit_final_assembly.fasta
-    ${SOFT}/rm_short_contigs.py $min_len ${out}/metaspades/scaffolds.fasta > ${out}/metaspades_final_assembly.fasta
-elif [ "$metaspades_assemble" = true ]; then
+if  [ "$metaspades_assemble" = true ]; then
     ${SOFT}/rm_short_contigs.py $min_len ${out}/metaspades/scaffolds.fasta > ${out}/final_assembly.fasta
 elif [ "$megahit_assemble" = true ]; then 
     ${SOFT}/fix_megahit_contig_naming.py ${out}/megahit/final.contigs.fa $min_len > ${out}/final_assembly.fasta
