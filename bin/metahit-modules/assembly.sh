@@ -2,9 +2,8 @@
 Megahit cannot be detected in the environment; megahit has binary version
 metaspades can work
 megahit parameters as options
-metaspades with option -k 21,33,55,61 hint must be odd and smaller than 128
-not use relative path
-if --megahit --metasapdes input at the same time, run the first one
+metaspades with option -k 21,33,55,61 hint must be odd and smaller than 128 *kwargs
+default megahit; use --metaspades to run metaspades instead of megahit
 quest.py cannot be found
 """
 #!/usr/bin/env bash
