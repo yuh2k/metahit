@@ -160,7 +160,7 @@ class ContactMatrix:
 
             logger.info('Handling the alignments...')
             self._bin_map(bam)
-
+"""
         logger.info('Filtering contigs according to minimal signal({})...'.format(self.min_signal))
         contig_id = self.max_offdiag()
         logger.debug('{} contigs remain'.format(len(contig_id)))
@@ -181,7 +181,7 @@ class ContactMatrix:
         self.seq_map = self.seq_map[:, contig_id]
         self.seq_map = self.seq_map.tocoo()
         del contig_id
-
+"""
         assert self.seq_map.shape[0] == len(self.seq_info), 'Filter error'
 
 
@@ -207,7 +207,10 @@ class ContactMatrix:
                 if not r.is_unmapped and not r.is_secondary and not r.is_supplementary:
                     return r
 
-        _seq_map = Sparse2DAccumulator(self.total_seq)
+        _seq_map_user = Sparse2DAccumulator(self.total_seq)
+        _seq_map_metacc = Sparse2DAccumulator(self.total_seq)
+        _seq_map_bin3c = Sparse2DAccumulator(self.total_seq)
+        
 
         with tqdm.tqdm(total=self.total_reads) as pbar:
             _mapq = self.min_mapq
@@ -277,7 +280,7 @@ class ContactMatrix:
         return rev_idx
 
 
-
+""" contig filtering
     def max_offdiag(self):
         _m = self.seq_map
         assert scisp.isspmatrix(_m), 'Input matrix is not a scipy.sparse object'
@@ -288,7 +291,7 @@ class ContactMatrix:
         _contig_id = [i for i in range(_m.shape[0]) if _sig[i] >= self.min_signal and _diag[i] > 0 and self.seq_info[i].sites > 0]
         del _m
         return _contig_id
-
+"""
 
 # Configure logger to output debug information
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
