@@ -1,11 +1,10 @@
 """
 bbduk procedure is not complete
-the first three steps are required/clumpy optional (default not)
-remove unused parameters like host/remove human sequences
+the first three steps are required/clumpy optional (default not) --dedup
+remove all materials regarding removing human sequences
 all paramters in bbduk need to be options
 ref=/home/linuxbrew/.linuxbrew/Homebrew/Cellar/bbtools/39.08/libexec/resources/adapters.fa
 fastqc cannot be run with error: perl: error while loading shared libraries: libnsl.so.1: cannot open shared object file
-detect whether some files exist before removing them
 """
 #!/usr/bin/env bash
 
@@ -28,7 +27,7 @@ help_message () {
     echo "    -2 STR          reverse fastq reads" 
     echo "    -o STR          output directory"
     echo "    -t INT          number of threads (default=1)"
-    echo "    -x STR          prefix of host index in bbmap database folder (default=hg38)"
+    echo "    -x STR          prefix of  index in bbmap database folder (default=hg38)"
     echo ""
     echo "    --skip-bbduk        don't remove human sequences with bbduk"
     echo "    --skip-trimming     don't trim sequences with bbduk"
@@ -43,7 +42,7 @@ help_message () {
 # Default parameters
 threads=1; out="false"; reads_1="false"; reads_2="false"
 bbduk=true; trim=true; pre_qc_report=true; post_qc_report=true
-HOST=hg38
+=hg38
 
 # Load in parameters using getopt
 OPTS=`getopt -o ht:o:1:2:x: --long help,skip-trimming,skip-bbduk,skip-pre-qc-report,skip-post-qc-report -- "$@"`
@@ -57,7 +56,7 @@ while true; do
         -o) out=$2; shift 2;;
         -1) reads_1=$2; shift 2;;
         -2) reads_2=$2; shift 2;;
-        -x) HOST=$2; shift 2;;
+        -x) =$2; shift 2;;
         -h | --help) help_message; exit 1; shift 1;;
         --skip-trimming) trim=false; shift 1;;
         --skip-bbduk) bbduk=false; shift 1;;
