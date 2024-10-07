@@ -1,3 +1,10 @@
+"""
+Input: contig info raw contact matrix
+do contig filtering first min-len min-signal
+normalization based on filtered contig info filtered contact matrix 
+spurious contact detection threshold/p
+output: denoised_contact_matix
+"""
 #!/usr/bin/env python3
 
 import os
