@@ -2,7 +2,7 @@
 line 27: bwa: command not found
 Samtools: -F 0x904 become option
 make a new folder named alignment to store results
-bwa index need to be included
+bwa index need to be included and is before bew mem
 """
 #!/usr/bin/env bash
 
