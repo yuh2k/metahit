@@ -1,6 +1,6 @@
 """
-detect the existence of depth.txt file before the echo "Coverage estimation completed successfully!"
-remove all other files apart from depth.txt in the folder
+detect the existence of coverage.txt file before the echo "Coverage estimation completed successfully!"
+remove all other files apart from coverage.txt in the folder
 """
 #!/usr/bin/env bash
 
