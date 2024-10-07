@@ -1,3 +1,8 @@
+"""
+automatically detect whether coverage.txt exists or not, if exists, output contig_info.csv with four columns, otherwise three columns
+contig info.csv
+three contact matrices user determined/metacc/bin3C difference on min-mapq min-match
+"""
 #!/usr/bin/env python
 # coding: utf-8
 
