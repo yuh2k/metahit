@@ -11,7 +11,7 @@ fastqc cannot be run with error: perl: error while loading shared libraries: lib
 ###########################################################################################################################################################
 #       	                                                                                                                                          #
 # This script is meant to be a comprehensive solution to QC new HiSeq reads in preparation for assembly and other operations.                             #
-# The main things this pipeline accomplishes are read trimming based on quality scores, and removal of human sequences.                                   #
+# The main things this pipeline accomplishes are read trimming based on quality scores                                #
 # The script also produces a FASTQC report before and after the procedures.                                                                               #
 #	                                                                                                                                 		  #
 ###########################################################################################################################################################
@@ -28,8 +28,6 @@ help_message () {
     echo "    -o STR          output directory"
     echo "    -t INT          number of threads (default=1)"
     echo "    -x STR          prefix of  index in bbmap database folder (default=hg38)"
-    echo ""
-    echo "    --skip-bbduk        don't remove human sequences with bbduk"
     echo "    --skip-trimming     don't trim sequences with bbduk"
     echo "    --skip-pre-qc-report don't make FastQC report of input sequences"
     echo "    --skip-post-qc-report don't make FastQC report of final sequences"
@@ -42,7 +40,7 @@ help_message () {
 # Default parameters
 threads=1; out="false"; reads_1="false"; reads_2="false"
 bbduk=true; trim=true; pre_qc_report=true; post_qc_report=true
-=hg38
+HOST=hg38
 
 # Load in parameters using getopt
 OPTS=`getopt -o ht:o:1:2:x: --long help,skip-trimming,skip-bbduk,skip-pre-qc-report,skip-post-qc-report -- "$@"`

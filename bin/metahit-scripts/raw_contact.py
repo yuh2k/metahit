@@ -165,7 +165,7 @@ class ContactMatrix:
 
             logger.info('Handling the alignments...')
             self._bin_map(bam)
-"""
+        """
         logger.info('Filtering contigs according to minimal signal({})...'.format(self.min_signal))
         contig_id = self.max_offdiag()
         logger.debug('{} contigs remain'.format(len(contig_id)))
@@ -186,7 +186,7 @@ class ContactMatrix:
         self.seq_map = self.seq_map[:, contig_id]
         self.seq_map = self.seq_map.tocoo()
         del contig_id
-"""
+        """
         assert self.seq_map.shape[0] == len(self.seq_info), 'Filter error'
 
 
