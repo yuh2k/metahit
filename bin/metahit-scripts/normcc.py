@@ -25,16 +25,13 @@ def normcc_local(contig_file, output_file=None):
             dtype={'site': float, 'length': float, 'covcc': float, 'signal': float}
         )
 
-        # 检查数据量
         print(f"Data shape: {df.shape}")
         print(df.head())
 
-        # 检查缺失值
         if df[['site', 'length', 'covcc', 'signal']].isnull().values.any():
             print("Warning: Missing values found.")
             df = df.dropna(subset=['site', 'length', 'covcc', 'signal'])
 
-        # 检查数据量是否足够
         if df.shape[0] <= 4:
             print("Not enough data points to fit the model.")
             return None
@@ -69,7 +66,6 @@ def normcc_local(contig_file, output_file=None):
 
         # Save the normalization coefficients to a file if output_file is specified
         if output_file:
-            # 确保输出目录存在
             output_dir = os.path.dirname(output_file)
             os.makedirs(output_dir, exist_ok=True)
 

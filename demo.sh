@@ -12,10 +12,10 @@ set -e  # Exit immediately if a command exits with a non-zero status
 set -o pipefail  # Ensure that pipeline errors are not masked
 
 # Define input parameters
-SG_R1="test_data/sim_sg_R1.fastq"
-SG_R2="test_data/sim_sg_R2.fastq"
-HIC_R1="test_data/sim_hic_r1.fq"
-HIC_R2="test_data/sim_hic_r2.fq"
+SG_R1="./test_data/sim_sg_R1.fastq"
+SG_R2="./test_data/sim_sg_R2.fastq"
+HIC_R1="./test_data/sim_hic_r1.fq"
+HIC_R2="./test_data/sim_hic_r2.fq"
 OUTPUT_DIR="output"
 
 # Activate Conda environment
@@ -73,7 +73,7 @@ bwa index "${OUTPUT_DIR}/assembly/final_assembly.fasta"
 # ====================================================================================
 
 # Define normalization parameters
-BAM_FILE="./output/alignment/MAP_SORTED.bam"
+BAM_FILE="./output/alignment/sorted_map.bam"
 FASTA_FILE="./output/assembly/final_assembly.fasta"
 ENZYMES=("EcoRI" "HindIII")
 NORMALIZATION_OUTPUT="./output/normalization"

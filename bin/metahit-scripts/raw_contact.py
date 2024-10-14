@@ -189,8 +189,6 @@ class ContactMatrix:
         """
         assert self.seq_map.shape[0] == len(self.seq_info), 'Filter error'
 
-
-
     def _bin_map(self, bam):
         import tqdm
 
@@ -215,7 +213,6 @@ class ContactMatrix:
         _seq_map_user = Sparse2DAccumulator(self.total_seq)
         _seq_map_metacc = Sparse2DAccumulator(self.total_seq)
         _seq_map_bin3c = Sparse2DAccumulator(self.total_seq)
-        
 
         with tqdm.tqdm(total=self.total_reads) as pbar:
             _mapq = self.min_mapq
@@ -265,15 +262,17 @@ class ContactMatrix:
                     ix1, ix2 = ix2, ix1
 
                 ix = (ix1, ix2)
-                if _seq_map.getitem(ix):
-                    _seq_map.setitem(ix, _seq_map.getitem(ix) + 1)
+                if _seq_map_user.getitem(ix):
+                    _seq_map_user.setitem(ix, _seq_map_user.getitem(ix) + 1)
                 else:
-                    _seq_map.setitem(ix, 1)
+                    _seq_map_user.setitem(ix, 1)
 
-        self.seq_map = _seq_map.get_coo()
-        del _seq_map, r1, r2, _idx
+        self.seq_map = _seq_map_user.get_coo()
+        del _seq_map_user, r1, r2, _idx
 
         logger.debug('Pair accounting: {}'.format(counts))
+
+
 
     def make_reverse_index(self, field_name):
         rev_idx = {}

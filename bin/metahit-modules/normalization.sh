@@ -1,7 +1,3 @@
-"""
-conda activate before running software so it is not needed
-
-"""
 #!/usr/bin/env bash
 
 #############################################################################################################

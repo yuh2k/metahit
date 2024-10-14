@@ -1,0 +1,27 @@
+Read QC
+"""
+bbduk procedure is not complete
+the first three steps are required/clumpy optional (default not) --dedup
+remove all materials regarding removing human sequences
+all paramters in bbduk need to be options
+ref=/home/linuxbrew/.linuxbrew/Homebrew/Cellar/bbtools/39.08/libexec/resources/adapters.fa
+fastqc cannot be run with error: perl: error while loading shared libraries: libnsl.so.1: cannot open shared object file
+"""
+
+Alignment
+"""
+line 27: bwa: command not found
+Samtools: -F 0x904 become option
+make a new folder named alignment to store results
+bwa index need to be included and is before bew mem
+"""
+
+Assembly
+"""
+Megahit cannot be detected in the environment; megahit has binary version
+metaspades can work
+megahit parameters as options
+metaspades with option -k 21,33,55,61 hint must be odd and smaller than 128 *kwargs
+default megahit; use --metaspades to run metaspades instead of megahit
+quest.py cannot be found
+"""

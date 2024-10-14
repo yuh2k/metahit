@@ -1,37 +1,37 @@
-"""
-line 27: bwa: command not found
-Samtools: -F 0x904 become option
-make a new folder named alignment to store results
-bwa index need to be included and is before bew mem
-"""
 #!/usr/bin/env bash
 
-#############################################################################################################
-# Alignment script using BWA MEM and SamTools.
-#
-# Aligns reads to the final assembly and processes the output using SamTools.
-#############################################################################################################
+set -e
+set -o pipefail
+set -x
 
-# Display usage if not enough arguments
-if [ "$#" -ne 8 ]; then
-    echo "Usage: $0 -f final_assembly.fasta -1 HIC_1_dedup.fastq.gz -2 HIC_2_dedup.fastq.gz -o output_dir"
-    exit 1
-fi
+# Define tool paths
+BWA_PATH="./external/bin/bwa"
+SAMTOOLS_PATH="./external/bin/samtools"
 
-# Read in the arguments
-while getopts f:1:2:o: flag
-do
-    case "${flag}" in
-        f) fasta=${OPTARG};;
-        1) reads_1=${OPTARG};;
-        2) reads_2=${OPTARG};;
-        o) output_dir=${OPTARG};;
-    esac
-done
+# Define input and output files
+REFERENCE="output/assembly/final_assembly.fasta"
+OUTPUT_DIR="output/alignment"
+READS_1="output/readqc/hic/final_pure_reads_1.fastq"
+READS_2="output/readqc/hic/final_pure_reads_2.fastq"
 
-mkdir -p "$output_dir"
-bwa mem -5SP "$fasta" "$reads_1" "$reads_2" > "$output_dir/MAP.sam"
-samtools view -F 0x904 -bS "$output_dir/MAP.sam" > "$output_dir/MAP_UNSORTED.bam"
-samtools sort -n "$output_dir/MAP_UNSORTED.bam" -o "$output_dir/MAP_SORTED.bam"
+# Create output directory
+mkdir -p "$OUTPUT_DIR"
+
+# Index the reference genome
+echo "Indexing reference genome with BWA..."
+$BWA_PATH index "$REFERENCE"
+
+# Align reads with BWA MEM
+echo "Aligning reads with BWA MEM..."
+$BWA_PATH mem -t 4 "$REFERENCE" "$READS_1" "$READS_2" > "$OUTPUT_DIR/map.sam"
+
+# Convert SAM to BAM
+echo "Converting SAM to BAM..."
+$SAMTOOLS_PATH view -F 0x904 -bS "$OUTPUT_DIR/map.sam" > "$OUTPUT_DIR/unsorted_map.bam"
+
+# Sort BAM by read name
+echo "Sorting BAM by read name..."
+$SAMTOOLS_PATH sort -n "$OUTPUT_DIR/unsorted_map.bam" -o "$OUTPUT_DIR/sorted_map.bam"
+
 
 echo "Alignment completed successfully!"

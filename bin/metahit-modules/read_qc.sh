@@ -1,11 +1,3 @@
-"""
-bbduk procedure is not complete
-the first three steps are required/clumpy optional (default not) --dedup
-remove all materials regarding removing human sequences
-all paramters in bbduk need to be options
-ref=/home/linuxbrew/.linuxbrew/Homebrew/Cellar/bbtools/39.08/libexec/resources/adapters.fa
-fastqc cannot be run with error: perl: error while loading shared libraries: libnsl.so.1: cannot open shared object file
-"""
 #!/usr/bin/env bash
 
 ###########################################################################################################################################################
@@ -116,12 +108,12 @@ if [ "$trim" = true ]; then
     ########################                 RUNNING BBDuk FOR TRIMMING                    ########################
     ########################################################################################################
     echo "Running BBDuk for trimming"
-    bbduk.sh -Xmx16g \
+    ./external/bbmap/bbduk.sh -Xmx16g \
         in1=$reads_1 \
         in2=$reads_2 \
         out1=${out}/trimmed_1.fastq \
         out2=${out}/trimmed_2.fastq \
-        ref=/home/linuxbrew/.linuxbrew/Homebrew/Cellar/bbtools/39.08/libexec/resources/adapters.fa \
+        ref=./external/bbmap/resources/adapters.fa \
         ktrim=r k=23 mink=11 hdist=1 tpe tbo qtrim=rl trimq=10 minlen=50
 
     if [ $? -ne 0 ]; then 
