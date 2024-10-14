@@ -1,7 +1,4 @@
-"""
-detect the existence of coverage.txt file before the echo "Coverage estimation completed successfully!"
-remove all other files apart from coverage.txt in the folder
-"""
+
 #!/usr/bin/env bash
 #############################################################################################################
 # Coverage Estimation Script using BBMap and jgi_summarize_bam_contig_depths.

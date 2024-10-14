@@ -37,8 +37,8 @@ conda activate metahit_env
 # ====================================================================================
 
 ./bin/metahit-modules/assembly.sh \
-    -1 "${OUTPUT_DIR}/readqc/sg/final_pure_reads_1.fastq" \
-    -2 "${OUTPUT_DIR}/readqc/sg/final_pure_reads_2.fastq" \
+    -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq" \
+    -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq" \
     -o "${OUTPUT_DIR}/assembly" \
     -m 24 -t 4 --megahit
 
@@ -54,8 +54,8 @@ bwa index "${OUTPUT_DIR}/assembly/final_assembly.fasta"
 
 ./bin/metahit-modules/alignment.sh \
     -f "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
-    -1 "${OUTPUT_DIR}/readqc/hic/final_pure_reads_1.fastq" \
-    -2 "${OUTPUT_DIR}/readqc/hic/final_pure_reads_2.fastq" \
+    -1 "${OUTPUT_DIR}/readqc/hic/final_reads_1.fastq" \
+    -2 "${OUTPUT_DIR}/readqc/hic/final_reads_2.fastq" \
     -o "${OUTPUT_DIR}/alignment"
 
 # ====================================================================================

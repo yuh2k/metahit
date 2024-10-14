@@ -11,8 +11,8 @@ SAMTOOLS_PATH="./external/bin/samtools"
 # Define input and output files
 REFERENCE="output/assembly/final_assembly.fasta"
 OUTPUT_DIR="output/alignment"
-READS_1="output/readqc/hic/final_pure_reads_1.fastq"
-READS_2="output/readqc/hic/final_pure_reads_2.fastq"
+READS_1="output/readqc/hic/final_reads_1.fastq"
+READS_2="output/readqc/hic/final_reads_2.fastq"
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
