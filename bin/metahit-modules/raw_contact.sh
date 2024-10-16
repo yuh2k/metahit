@@ -1,5 +1,4 @@
 #!/bin/bash
-# /home/hh/anaconda3/bin/python
 
 # Help function to display usage
 function show_help {
@@ -11,8 +10,11 @@ function show_help {
     echo "  --out         Output directory to save Hi-C contact matrix (.npz) and contig info (.csv)"
     echo ""
     echo "Example usage:"
-    echo "$0 --bam output/alignment/MAP_SORTED.bam --fasta output/assembly/final_assembly.fasta --out output/downstream"
+    echo "$0 --bam output/alignment/sorted_map.bam --fasta output/assembly/final_assembly.fasta --out output/normalization/raw"
 }
+
+mkdir -p output/normalization/raw
+
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -33,11 +35,16 @@ if [ -z "$BAM_FILE" ] || [ -z "$FASTA_FILE" ] || [ -z "$OUTPUT_DIR" ]; then
     exit 1
 fi
 
-# Print the received arguments
-echo "BAM file: $BAM_FILE"
-echo "FASTA file: $FASTA_FILE"
-echo "Output directory: $OUTPUT_DIR"
+# Activate Conda environment
+source ~/anaconda3/etc/profile.d/conda.sh
+conda activate metahit_env
+COVERAGE_FILE="output/estimation/coverage.txt"
 
-echo "Starting script"
-python ./bin/metahit-scripts/raw_contig.py --bam "$BAM_FILE" --fasta "$FASTA_FILE" --out "$OUTPUT_DIR"
-echo "Script completed"
+# Run raw_contact.py
+python ./bin/metahit-scripts/raw_contact.py \
+    --bam "$BAM_FILE" \
+    --fasta "$FASTA_FILE" \
+    --out "$OUTPUT_DIR" \
+    --coverage "$COVERAGE_FILE"
+
+echo "Raw contact generation completed successfully."
