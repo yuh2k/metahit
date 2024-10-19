@@ -32,27 +32,38 @@ conda activate metahit_env
 # Assembly
 # ====================================================================================
 
+# Adjusted assembly step to include new options for MEGAHIT
 ./bin/metahit-modules/assembly.sh \
     -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq" \
     -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq" \
     -o "${OUTPUT_DIR}/assembly" \
-    -m 24 -t 4 --megahit
+    -m 24 -t 4 \
+    --megahit \
+    --k-min 21 --k-max 141 --k-step 12 \
+    -l 1000
 
-# ====================================================================================
-# Generate Index
-# ====================================================================================
-
-bwa index "${OUTPUT_DIR}/assembly/final_assembly.fasta"
+# If you prefer to use metaSPAdes instead of MEGAHIT, uncomment the following lines and comment out the MEGAHIT section above
+# ./bin/metahit-modules/assembly.sh \
+#     -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq" \
+#     -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq" \
+#     -o "${OUTPUT_DIR}/assembly" \
+#     -m 24 -t 4 \
+#     --metaspades \
+#     --k-list 21,33,55,77 \
+#     -l 1000
 
 # ====================================================================================
 # Alignment
 # ====================================================================================
 
+# Adjusted alignment step to include the samtools filter option if needed
 ./bin/metahit-modules/alignment.sh \
-    -f "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
+    -r "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
     -1 "${OUTPUT_DIR}/readqc/hic/final_reads_1.fastq" \
     -2 "${OUTPUT_DIR}/readqc/hic/final_reads_2.fastq" \
-    -o "${OUTPUT_DIR}/alignment"
+    -o "${OUTPUT_DIR}/alignment" \
+    --threads 4 \
+    --samtools-filter '-F 0x904'
 
 # ====================================================================================
 # Coverage Estimation
@@ -67,16 +78,19 @@ bwa index "${OUTPUT_DIR}/assembly/final_assembly.fasta"
 # ====================================================================================
 # Raw Contact Generation
 # ====================================================================================
+
 # Define normalization parameters
 BAM_FILE="${OUTPUT_DIR}/alignment/sorted_map.bam"
 FASTA_FILE="${OUTPUT_DIR}/assembly/final_assembly.fasta"
 NORMALIZATION_OUTPUT="${OUTPUT_DIR}/normalization"
+COVERAGE_FILE="${OUTPUT_DIR}/estimation/coverage.txt"
 
 # Run raw_contact.sh to generate contact matrices and contig info
 ./bin/metahit-modules/raw_contact.sh \
     --bam "$BAM_FILE" \
     --fasta "$FASTA_FILE" \
-    --out "${NORMALIZATION_OUTPUT}/raw"
+    --out "${NORMALIZATION_OUTPUT}/raw" \
+    --coverage "$COVERAGE_FILE"
 
 # ====================================================================================
 # Normalization Steps
@@ -84,7 +98,7 @@ NORMALIZATION_OUTPUT="${OUTPUT_DIR}/normalization"
 
 # Set common parameters
 CONTIG_FILE="${NORMALIZATION_OUTPUT}/raw/contig_info.csv"
-CONTACT_MATRIX_FILE="${NORMALIZATION_OUTPUT}/raw/contact_matrix_user.npz"  # Corrected filename
+CONTACT_MATRIX_FILE="${NORMALIZATION_OUTPUT}/raw/contact_matrix_user.npz"
 
 # Raw Normalization
 ./bin/metahit-modules/normalization.sh raw \
