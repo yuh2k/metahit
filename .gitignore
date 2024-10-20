@@ -4,3 +4,5 @@ output
 ref
 bin/metahit-scripts/__pycache__/
 external
+.DS_Store
+comments.txt

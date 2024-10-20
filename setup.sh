@@ -3,7 +3,7 @@
 # setup.sh
 # This script sets up the necessary dependencies for the MetaHit pipeline.
 # It downloads BWA (from GitHub, builds it), Samtools, FastQC, and BBTools
-# into the "external" directory within the repository and updates scripts to use these local binaries.
+# into the "external" directory within the repository.
 
 # Exit immediately if a command exits with a non-zero status
 set -e
@@ -137,8 +137,6 @@ function install_fastqc() {
     fi
 }
 
-# ======================== Added BBTools Setup Below ========================
-
 # Function to download and install BBTools
 function install_bbtools() {
     BBTOOLS_VERSION="39.10"  # Latest version as per user request
@@ -151,21 +149,17 @@ function install_bbtools() {
         echo_info "BBTools tarball already exists, skipping download."
     fi
 
-    if [ ! -f "${BIN_DIR}/bbmap" ]; then
+    if [ ! -f "${BIN_DIR}/bbmap.sh" ]; then
         echo_info "Extracting BBTools..."
         tar -xzf "${EXTERNAL_DIR}/${BBTOOLS_TARBALL}" -C "$EXTERNAL_DIR" || { echo_error "Failed to extract BBTools tarball."; exit 1; }
-        cd "${EXTERNAL_DIR}/bbmap"
-        echo_info "Installing BBTools..."
-        # BBTools doesn't require compilation; binaries are ready to use
-        echo_info "Creating symbolic links for BBTools binaries in 'external/bin'..."
-        for bin in *.sh; do
-            # Remove the .sh extension for easier access
-            ln -sf "${EXTERNAL_DIR}/bbmap-${BBTOOLS_VERSION}/${bin}" "${BIN_DIR}/$(echo ${bin} | sed 's/.sh$//')"
-        done
-        cd ../..
 
-        echo_info "Cleaning up BBTools source directory..."
-        rm -rf "${EXTERNAL_DIR}/bbmap-${BBTOOLS_VERSION}" "${EXTERNAL_DIR}/${BBTOOLS_TARBALL}"
+        echo_info "Creating symbolic links for BBTools binaries in 'external/bin'..."
+        cd "${EXTERNAL_DIR}/bbmap"
+        for bin in *.sh; do
+            ln -sf "${EXTERNAL_DIR}/bbmap/${bin}" "${BIN_DIR}/${bin}"
+        done
+
+        cd ../..
 
         echo_info "BBTools installed successfully."
     else
@@ -173,13 +167,12 @@ function install_bbtools() {
     fi
 }
 
-# ======================== End of BBTools Setup ========================
 
 # Install all dependencies
 install_bwa
 install_samtools
 install_fastqc
-install_bbtools  # Added BBTools installation
+install_bbtools  # BBTools installation
 
 # Verify installations
 echo_info "Verifying installations..."
@@ -205,48 +198,6 @@ else
     echo_info "FastQC installed successfully."
 fi
 
-
-
-# Function to replace commands in scripts with local paths using a different delimiter to handle slashes
-function replace_command() {
-    local script="$1"
-    local cmd="$2"
-    local replacement="$3"
-    if grep -q "\b${cmd}\b" "$script"; then
-        echo_info "Updating $cmd in $script"
-        # Using | as the delimiter instead of / to avoid conflict with paths
-        sed -i "s|\b${cmd}\b|${replacement}|g" "$script"
-    else
-        echo_info "$cmd not found in $script, skipping."
-    fi
-}
-
-# Define paths to the local binaries
-BWA_PATH="${BIN_DIR}/bwa"
-SAMTOOLS_PATH="${BIN_DIR}/samtools"
-FASTQC_PATH="${BIN_DIR}/fastqc"
-BBMAP_PATH="${EXTERNAL_DIR}/bbmap"
-
-# List of scripts to update (relative to repo root)
-SCRIPTS=(
-    "bin/metahit-modules/read_qc.sh"
-    "bin/metahit-modules/alignment.sh"
-    "bin/metahit-modules/coverage_estimation.sh"
-    "bin/metahit-modules/normalization.sh"
-)
-
-# Update each script to use local binaries
-for script in "${SCRIPTS[@]}"; do
-    if [ -f "$script" ]; then
-        replace_command "$script" "bwa" "$BWA_PATH"
-        replace_command "$script" "samtools" "$SAMTOOLS_PATH"
-        replace_command "$script" "fastqc" "$FASTQC_PATH"
-        replace_command "$script" "bbmap" "$BBMAP_PATH"  # Update BBTools command
-    else
-        echo_error "Script $script not found."
-    fi
-done
-
 # Fix missing shared library for FastQC (libnsl.so.1)
 echo_info "Checking for libnsl.so.1 library..."
 
@@ -257,11 +208,14 @@ else
     sudo apt install -y libnsl-dev
 fi
 
+rm external/Bbmap_39.10.tar.gz
+
 # Ensure all external binaries have execute permissions
 echo_info "Ensuring all external binaries have execute permissions."
 chmod +x "${BIN_DIR}/bwa"
 chmod +x "${BIN_DIR}/samtools"
 chmod +x "${BIN_DIR}/fastqc"
+chmod +x "${BIN_DIR}"/*
 
 # Optionally, add external/bin to PATH
 echo_info "Dependencies have been successfully installed and configured."
