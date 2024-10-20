@@ -32,25 +32,25 @@ conda activate metahit_env
 # Assembly
 # ====================================================================================
 
-# Adjusted assembly step to include new options for MEGAHIT
-./bin/metahit-modules/assembly.sh \
-    -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq" \
-    -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq" \
-    -o "${OUTPUT_DIR}/assembly" \
-    -m 24 -t 4 \
-    --megahit \
-    --k-min 21 --k-max 141 --k-step 12 \
-    -l 1000
-
-# If you prefer to use metaSPAdes instead of MEGAHIT, uncomment the following lines and comment out the MEGAHIT section above
 # ./bin/metahit-modules/assembly.sh \
 #     -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq" \
 #     -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq" \
 #     -o "${OUTPUT_DIR}/assembly" \
 #     -m 24 -t 4 \
-#     --metaspades \
-#     --k-list 21,33,55,77 \
+#     --megahit \
+#     --k-min 21 --k-max 141 --k-step 12 \
 #     -l 1000
+
+
+# If prefer to use metaSPAdes instead of MEGAHIT, uncomment the following lines and comment out the MEGAHIT section above
+./bin/metahit-modules/assembly.sh \
+    -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq" \
+    -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq" \
+    -o "${OUTPUT_DIR}/assembly" \
+    -m 24 -t 4 \
+    --metaspades \
+    --k-list 21,33,55,77 \
+    -l 1000
 
 # ====================================================================================
 # Alignment
