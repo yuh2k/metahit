@@ -109,10 +109,10 @@ class ContactMatrix:
         self.coverage_file = coverage_file
 
         # Parameters for metacc and bin3C
-        self.min_mapq_metacc = 1
-        self.min_match_metacc = 0
-        self.min_mapq_bin3c = 0
-        self.min_match_bin3c = 0
+        self.min_mapq_metacc = 30
+        self.min_match_metacc = 30
+        self.min_mapq_bin3c = 60
+        self.min_match_bin3c = 10
 
         # Ensure output directories exist
         os.makedirs(os.path.join(self.path, 'tmp'), exist_ok=True)
