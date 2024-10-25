@@ -240,7 +240,7 @@ class Normalization:
         Perform MetaTOR normalization.
         """
         try:
-            covcc = self.contact_matrix.tocsr().diagonal()
+            covcc = self.contact_matrix.tocsr().diagonal() #MetaTOR use coverage instead of covcc
             covcc = covcc + epsilon
             # Normalize contact values
             normalized_data = []
