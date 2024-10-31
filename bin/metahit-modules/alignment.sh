@@ -104,5 +104,5 @@ $SAMTOOLS_PATH view $SAMTOOLS_FILTER -bS "$OUTPUT_DIR/map.sam" > "$OUTPUT_DIR/un
 # Sort BAM by read name
 echo "Sorting BAM by read name..."
 $SAMTOOLS_PATH sort -n "$OUTPUT_DIR/unsorted_map.bam" -o "$OUTPUT_DIR/sorted_map.bam"
-
+rm "$OUTPUT_DIR/unsorted_map.bam"
 echo "Alignment completed successfully!"

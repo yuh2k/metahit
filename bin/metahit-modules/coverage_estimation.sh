@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 #############################################################################################################
 # Coverage Estimation Script using BBMap and jgi_summarize_bam_contig_depths.
@@ -21,18 +20,23 @@ function echo_error() {
 }
 
 # Display usage if not enough arguments
-if [ "$#" -ne 8 ]; then
-    echo "Usage: $0 -1 WGS_1.fastq.gz -2 WGS_2.fastq.gz -r final.contigs.fa -o output_dir"
+if [ "$#" -lt 8 ]; then
+    echo "Usage: $0 -1 WGS_1.fastq.gz -2 WGS_2.fastq.gz -r final.contigs.fa -o output_dir [-m Java_heap_memory]"
     exit 1
 fi
 
+# Set default Java heap memory to 80% of available memory
+default_memory=$(( $(free -m | awk '/^Mem:/{print $2}') * 80 / 100 ))
+JAVA_HEAP="-Xmx${default_memory}m"
+
 # Read in the arguments
-while getopts "1:2:r:o:" opt; do
+while getopts "1:2:r:o:m:" opt; do
     case $opt in
         1) reads_1=$OPTARG ;;
         2) reads_2=$OPTARG ;;
         r) ref=$OPTARG ;;
         o) output_dir=$OPTARG ;;
+        m) JAVA_HEAP="-Xmx$OPTARG" ;;
         *) echo "Invalid option"; exit 1 ;;
     esac
 done
@@ -40,27 +44,23 @@ done
 # Check if required parameters are set
 if [[ -z "$reads_1" || -z "$reads_2" || -z "$ref" || -z "$output_dir" ]]; then
     echo_error "Missing required parameters"
-    echo "Usage: $0 -1 WGS_1.fastq.gz -2 WGS_2.fastq.gz -r final.contigs.fa -o output_dir"
+    echo "Usage: $0 -1 WGS_1.fastq.gz -2 WGS_2.fastq.gz -r final.contigs.fa -o output_dir [-m Java_heap_memory]"
     exit 1
 fi
 
 # Create the output directory if it doesn't exist
 mkdir -p "$output_dir"
 
-# Increase Java heap memory to 4 GB (adjust as needed)
-JAVA_HEAP="-Xmx4g"
-
-# Run BBMap with increased memory
+# Run BBMap with memory setting
 ./external/bbmap/bbmap.sh in1="$reads_1" in2="$reads_2" ref="$ref" out="$output_dir/SG_map.sam" bamscript="$output_dir/bs.sh" $JAVA_HEAP
 
-bin/metahit-scripts/jgi_summarize_bam_contig_depths --outputDepth output/estimation/coverage.txt --pairedContigs pair.txt $output_dir/SG_map.sam
+bin/metahit-scripts/jgi_summarize_bam_contig_depths --outputDepth $output_dir/estimation/coverage.txt --pairedContigs pair.txt $output_dir/SG_map.sam
 
 find "$output_dir" -type f ! -name "coverage.txt" -exec rm -f {} +
 
-
 # Check if coverage.txt was created
-if [[ -f "$output_dir/coverage.txt" ]]; then
-    echo_info "Coverage.txt generated successfully at $output_dir/coverage.txt"
+if [[ -f "$output_dir/estimation/coverage.txt" ]]; then
+    echo_info "Coverage.txt generated successfully at $output_dir/estimation/coverage.txt"
 else
     echo_error "Failed to generate coverage.txt. Check $output_dir/jgi_summarize.log for details."
     exit 1

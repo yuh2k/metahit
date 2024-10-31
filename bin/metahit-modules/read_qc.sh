@@ -131,7 +131,7 @@ bbduk.sh -Xmx16g \
     ktrim=r k=23 mink=11 hdist=1 tpe tbo \
     minlen="$minlen" \
     threads="$threads" \
-    gzip=false
+    gzip=true
 
 if [ $? -ne 0 ]; then
     echo "Something went wrong with BBDuk step 1. Exiting."

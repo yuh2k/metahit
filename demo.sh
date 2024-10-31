@@ -33,19 +33,19 @@ conda activate metahit_env
 # ====================================================================================
 
 # ./bin/metahit-modules/assembly.sh \
-#     -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq" \
-#     -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq" \
+#     -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq.gz" \
+#     -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq.gz" \
 #     -o "${OUTPUT_DIR}/assembly" \
 #     -m 24 -t 4 \
-#     --megahit \
+#     --megahit \   
 #     --k-min 21 --k-max 141 --k-step 12 \
 #     -l 1000
 
 
 # If prefer to use metaSPAdes instead of MEGAHIT, uncomment the following lines and comment out the MEGAHIT section above
 ./bin/metahit-modules/assembly.sh \
-    -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq" \
-    -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq" \
+    -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq.gz" \
+    -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq.gz" \
     -o "${OUTPUT_DIR}/assembly" \
     -m 24 -t 4 \
     --metaspades \

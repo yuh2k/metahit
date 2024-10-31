@@ -143,8 +143,6 @@ fi
 # Process the assembly output
 if [ "$metaspades_assemble" = true ]; then
     ${SOFT}/rm_short_contigs.py "$min_len" "${out}/metaspades/scaffolds.fasta" > "${out}/final_assembly.fasta"
-elif [ "$megahit_assemble" = true ]; then 
-    ${SOFT}/fix_megahit_contig_naming.py "${out}/megahit/final.contigs.fa" "$min_len" > "${out}/final_assembly.fasta"
 fi
 
 if [[ ! -s "${out}/final_assembly.fasta" ]]; then echo "Error: Final assembly failed."; exit 1; fi

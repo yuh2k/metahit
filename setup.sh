@@ -37,13 +37,9 @@ else
     echo_info "'bin' directory already exists inside 'external'."
 fi
 
-# Update package lists
-echo_info "Updating package lists..."
-sudo apt update
-
-# Install system dependencies
-echo_info "Installing system dependencies: build-essential, wget, unzip, openjdk-11-jdk, perl, git..."
-sudo apt install -y build-essential wget unzip openjdk-11-jdk perl git
+# Install dependencies via Conda
+echo_info "Installing dependencies using Conda..."
+conda install -y -c bioconda build-essential wget unzip openjdk perl git
 
 # Function to download and build BWA from GitHub
 function install_bwa() {
@@ -167,7 +163,6 @@ function install_bbtools() {
     fi
 }
 
-
 # Install all dependencies
 install_bwa
 install_samtools
@@ -197,18 +192,6 @@ if [ ! -f "${BIN_DIR}/fastqc" ]; then
 else
     echo_info "FastQC installed successfully."
 fi
-
-# Fix missing shared library for FastQC (libnsl.so.1)
-echo_info "Checking for libnsl.so.1 library..."
-
-if ldconfig -p | grep -q "libnsl.so.1"; then
-    echo_info "libnsl.so.1 is already installed."
-else
-    echo_info "Installing libnsl-dev to provide libnsl.so.1..."
-    sudo apt install -y libnsl-dev
-fi
-
-rm external/Bbmap_39.10.tar.gz
 
 # Ensure all external binaries have execute permissions
 echo_info "Ensuring all external binaries have execute permissions."
