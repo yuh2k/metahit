@@ -11,14 +11,25 @@ def run_command(command):
         print(f"[ERROR] Command failed: {e}")
         exit(1)
 
+def ensure_dir_exists(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+def absolute_path(path):
+    return os.path.abspath(path)
+
 def readqc(args):
     print("[INFO] Running Read QC")
-    command = f"./bin/metahit-modules/read_qc.sh -1 {args.r1} -2 {args.r2} -o {args.output} -t {args.threads}"
+    output_dir = absolute_path(args.output)
+    ensure_dir_exists(output_dir)
+    command = f"./bin/metahit-modules/read_qc.sh -1 {absolute_path(args.r1)} -2 {absolute_path(args.r2)} -o {output_dir} -t {args.threads}"
     run_command(command)
 
 def assembly(args):
     print("[INFO] Running Assembly")
-    command = f"./bin/metahit-modules/assembly.sh -1 {args.r1} -2 {args.r2} -o {args.output} -m {args.memory} -t {args.threads}"
+    output_dir = absolute_path(args.output)
+    ensure_dir_exists(output_dir)
+    command = f"./bin/metahit-modules/assembly.sh -1 {absolute_path(args.r1)} -2 {absolute_path(args.r2)} -o {output_dir} -m {args.memory} -t {args.threads}"
     if args.megahit:
         command += f" --megahit --k-min {args.k_min} --k-max {args.k_max} --k-step {args.k_step}"
     elif args.metaspades:
@@ -28,24 +39,34 @@ def assembly(args):
 
 def alignment(args):
     print("[INFO] Running Alignment")
-    command = f"./bin/metahit-modules/alignment.sh -r {args.ref} -1 {args.r1} -2 {args.r2} -o {args.output} --threads {args.threads}"
+    output_dir = absolute_path(args.output)
+    ensure_dir_exists(output_dir)
+    command = f"./bin/metahit-modules/alignment.sh -r {absolute_path(args.ref)} -1 {absolute_path(args.r1)} -2 {absolute_path(args.r2)} -o {output_dir} --threads {args.threads}"
     if args.samtools_filter:
         command += f" --samtools-filter '{args.samtools_filter}'"
     run_command(command)
 
 def coverage_estimation(args):
     print("[INFO] Running Coverage Estimation")
-    command = f"./bin/metahit-modules/coverage_estimation.sh -1 {args.r1} -2 {args.r2} -r {args.ref} -o {args.output}"
+    output_dir = absolute_path(args.output)
+    ensure_dir_exists(output_dir)
+    command = f"./bin/metahit-modules/coverage_estimation.sh -1 {absolute_path(args.r1)} -2 {absolute_path(args.r2)} -r {absolute_path(args.ref)} -o {output_dir}"
     run_command(command)
 
 def raw_contact(args):
     print("[INFO] Running Raw Contact Generation")
-    command = f"./bin/metahit-modules/raw_contact.sh --bam {args.bam} --fasta {args.fasta} --out {args.output} --coverage {args.coverage}"
+    output_dir = absolute_path(args.output)
+    ensure_dir_exists(output_dir)
+    command = f"./bin/metahit-modules/raw_contact.sh --bam {absolute_path(args.bam)} --fasta {absolute_path(args.fasta)} --out {output_dir}"
+    if args.coverage:
+        command += f" --coverage {absolute_path(args.coverage)}"
     run_command(command)
 
 def normalization(args):
     print(f"[INFO] Running {args.method} Normalization")
-    command = f"./bin/metahit-modules/normalization.sh {args.method} --contig_file {args.contig_file} --contact_matrix_file {args.contact_matrix_file} --output_path {args.output} --thres {args.thres}"
+    output_dir = absolute_path(args.output)
+    ensure_dir_exists(output_dir)
+    command = f"./bin/metahit-modules/normalization.sh {args.method} --contig_file {absolute_path(args.contig_file)} --contact_matrix_file {absolute_path(args.contact_matrix_file)} --output_path {output_dir} --thres {args.thres}"
     if args.method == "bin3c":
         command += f" --max_iter {args.max_iter} --tol {args.tol}"
     elif args.method == "raw":
@@ -99,7 +120,7 @@ def main():
     raw_parser.add_argument("--bam", required=True, help="Path to BAM file")
     raw_parser.add_argument("--fasta", required=True, help="Path to FASTA file")
     raw_parser.add_argument("--out", dest="output", required=True, help="Output directory")
-    raw_parser.add_argument("--coverage", required=True, help="Path to coverage file")
+    raw_parser.add_argument("--coverage", help="Path to coverage file")
 
     # Normalization
     norm_parser = subparsers.add_parser("normalization")

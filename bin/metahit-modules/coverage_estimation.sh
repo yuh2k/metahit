@@ -44,8 +44,6 @@ if [[ -z "$reads_1" || -z "$reads_2" || -z "$ref" || -z "$output_dir" ]]; then
     exit 1
 fi
 
-# Create the output directories if they don't exist
-mkdir -p "$output_dir/estimation"
 
 # Run BBMap with memory setting and capture output for debugging
 echo_info "Running BBMap..."

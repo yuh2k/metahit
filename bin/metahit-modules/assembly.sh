@@ -73,6 +73,24 @@ if [ "$out" = "false" ] || [ "$reads_1" = "false" ] || [ "$reads_2" = "false" ];
     help_message; exit 1
 fi
 
+# Dependency checks
+echo "[INFO] Checking dependencies..."
+if [ "$metaspades_assemble" = true ] && ! command -v metaspades.py &> /dev/null; then
+    echo "[ERROR] metaSPAdes is not installed or not in the PATH."; exit 1
+fi
+
+if [ "$megahit_assemble" = true ] && ! command -v megahit &> /dev/null; then
+    echo "[ERROR] MEGAHIT is not installed or not in the PATH."; exit 1
+fi
+
+if ! command -v quast.py &> /dev/null; then
+    echo "[ERROR] QUAST is not installed or not in the PATH."; exit 1
+fi
+
+if [ ! -f "${SOFT}/rm_short_contigs.py" ]; then
+    echo "[ERROR] Script 'rm_short_contigs.py' not found in ${SOFT}."; exit 1
+fi
+
 mkdir -p "$out" || { echo "Error: Cannot create output directory."; exit 1; }
 
 # Validate and set up assembler-specific parameters
@@ -149,8 +167,4 @@ if [[ ! -s "${out}/final_assembly.fasta" ]]; then echo "Error: Final assembly fa
 
 echo "RUNNING ASSEMBLY QC WITH QUAST"
 quast.py -t "$threads" -o "${out}/QUAST_out" -m 500 "${out}/final_assembly.fasta"
-cp "${out}/QUAST_out/report.html" "${out}/assembly_report.html"
-
-if [[ ! -s "${out}/assembly_report.html" ]]; then echo "Error: QUAST analysis failed."; exit 1; fi
-
-echo "ASSEMBLY PIPELINE COMPLETED SUCCESSFULLY!"
+cp "${out}/QUAST
