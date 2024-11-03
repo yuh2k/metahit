@@ -234,10 +234,16 @@ class Normalization:
             print(f"Error during bin3C normalization: {e}")
             return None
 
-
-    def metator(self, epsilon=1):
+    def MetaTOR(self, epsilon=1):
         """
-        Perform MetaTOR normalization.
+        Perform FastNorm normalization.
+        """
+        raw_contacts/geometric mean of (coverage_i * coverage_j)
+        denoise
+        
+    def FastNorm(self, epsilon=1):
+        """
+        Perform FastNorm normalization.
         """
         try:
             covcc = self.contact_matrix.tocsr().diagonal() #MetaTOR use coverage instead of within-contig contacts (i.e., covcc)
