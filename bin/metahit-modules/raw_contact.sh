@@ -39,10 +39,6 @@ fi
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
-# Activate Conda environment
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate metahit_env
-
 # Run raw_contact.py
 python ./bin/metahit-scripts/raw_contact.py \
     --bam "$BAM_FILE" \
@@ -50,4 +46,19 @@ python ./bin/metahit-scripts/raw_contact.py \
     --out "$OUTPUT_DIR" \
     ${COVERAGE_FILE:+--coverage "$COVERAGE_FILE"}
 
-echo "Raw contact generation completed successfully."
+# Define expected output files
+CONTACT_MATRIX_FILE="$OUTPUT_DIR/contact_matrix_user.npz"
+CONTIG_INFO_FILE="$OUTPUT_DIR/contig_info.csv"
+
+# Check if output files were generated
+if [[ -f "$CONTACT_MATRIX_FILE" && -f "$CONTIG_INFO_FILE" ]]; then
+    echo "Raw contact generation completed successfully."
+    echo "Output files:"
+    echo "  Contact matrix: $CONTACT_MATRIX_FILE"
+    echo "  Contig info: $CONTIG_INFO_FILE"
+else
+    echo "Error: Expected output files were not generated."
+    [[ ! -f "$CONTACT_MATRIX_FILE" ]] && echo "Missing file: $CONTACT_MATRIX_FILE"
+    [[ ! -f "$CONTIG_INFO_FILE" ]] && echo "Missing file: $CONTIG_INFO_FILE"
+    exit 1
+fi

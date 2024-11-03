@@ -131,7 +131,7 @@ bbduk.sh -Xmx16g \
     ktrim=r k=23 mink=11 hdist=1 tpe tbo \
     minlen="$minlen" \
     threads="$threads" \
-    gzip=true
+        gzip=true
 
 if [ $? -ne 0 ]; then
     echo "Something went wrong with BBDuk step 1. Exiting."
@@ -149,7 +149,7 @@ bbduk.sh -Xmx16g \
     ftm=5 \
     minlen="$minlen" \
     threads="$threads" \
-    gzip=false
+    gzip=true
 
 if [ $? -ne 0 ]; then
     echo "Something went wrong with BBDuk step 2. Exiting."
@@ -165,7 +165,7 @@ bbduk.sh -Xmx16g \
     out2="${out}/step3_lefttrim_2.fastq" \
     ftl="$ftl" \
     threads="$threads" \
-    gzip=false
+    gzip=true
 
 if [ $? -ne 0 ]; then
     echo "Something went wrong with BBDuk step 3. Exiting."
@@ -182,7 +182,7 @@ if [ "$dedup" = true ]; then
         out2="${out}/final_reads_2.fastq" \
         dedupe \
         threads="$threads" \
-        gzip=false
+        gzip=true
 
     if [ $? -ne 0 ]; then
         echo "Something went wrong with Clumpify. Exiting."

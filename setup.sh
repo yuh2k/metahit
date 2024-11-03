@@ -39,7 +39,7 @@ fi
 
 # Install dependencies via Conda
 echo_info "Installing dependencies using Conda..."
-conda install -y -c bioconda build-essential wget unzip openjdk perl git
+conda install -y -c bioconda wget unzip openjdk perl git
 
 # Function to download and build BWA from GitHub
 function install_bwa() {
@@ -133,7 +133,6 @@ function install_fastqc() {
     fi
 }
 
-# Function to download and install BBTools
 function install_bbtools() {
     BBTOOLS_VERSION="39.10"  # Latest version as per user request
     BBTOOLS_TARBALL="Bbmap_${BBTOOLS_VERSION}.tar.gz"
@@ -167,8 +166,7 @@ function install_bbtools() {
 install_bwa
 install_samtools
 install_fastqc
-install_bbtools  # BBTools installation
-
+install_bbtools 
 # Verify installations
 echo_info "Verifying installations..."
 

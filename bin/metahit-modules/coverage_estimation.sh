@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
-#############################################################################################################
-# Coverage Estimation Script using BBMap and jgi_summarize_bam_contig_depths.
-#
-# This script aligns WGS reads to the final assembly, sorts the BAM file by read name for normalization,
-# then sorts by coordinate for indexing, and estimates the coverage.
-#############################################################################################################
 
-set -e  # Exit immediately if a command exits with a non-zero status
-set -o pipefail  # Ensure that pipeline errors are not masked
+# Coverage Estimation Script using BBMap and jgi_summarize_bam_contig_depths.
+
+set -e
+set -o pipefail
 
 # Function to print informational messages
 function echo_info() {
@@ -48,23 +44,32 @@ if [[ -z "$reads_1" || -z "$reads_2" || -z "$ref" || -z "$output_dir" ]]; then
     exit 1
 fi
 
-# Create the output directory if it doesn't exist
-mkdir -p "$output_dir"
+# Create the output directories if they don't exist
+mkdir -p "$output_dir/estimation"
 
-# Run BBMap with memory setting
-./external/bbmap/bbmap.sh in1="$reads_1" in2="$reads_2" ref="$ref" out="$output_dir/SG_map.sam" bamscript="$output_dir/bs.sh" $JAVA_HEAP
+# Run BBMap with memory setting and capture output for debugging
+echo_info "Running BBMap..."
+./external/bbmap/bbmap.sh in1="$reads_1" in2="$reads_2" ref="$ref" out="$output_dir/SG_map.sam" bamscript="$output_dir/bs.sh" $JAVA_HEAP > "$output_dir/bbmap.log" 2>&1
 
-bin/metahit-scripts/jgi_summarize_bam_contig_depths --outputDepth $output_dir/estimation/coverage.txt --pairedContigs pair.txt $output_dir/SG_map.sam
+# Check if BBMap generated the SAM file successfully
+if [[ ! -f "$output_dir/SG_map.sam" ]]; then
+    echo_error "BBMap failed to generate SG_map.sam. Check $output_dir/bbmap.log for details."
+    exit 1
+fi
 
-find "$output_dir" -type f ! -name "coverage.txt" -exec rm -f {} +
+# Run jgi_summarize_bam_contig_depths and log output
+echo_info "Running jgi_summarize_bam_contig_depths..."
+bin/metahit-scripts/jgi_summarize_bam_contig_depths \
+    --outputDepth "$output_dir/coverage.txt" \
+    --pairedContigs pair.txt \
+    "$output_dir/SG_map.sam" > "$output_dir/jgi_summarize.log" 2>&1
 
 # Check if coverage.txt was created
-if [[ -f "$output_dir/estimation/coverage.txt" ]]; then
+if [[ -f "$output_dir/coverage.txt" ]]; then
     echo_info "Coverage.txt generated successfully at $output_dir/estimation/coverage.txt"
 else
     echo_error "Failed to generate coverage.txt. Check $output_dir/jgi_summarize.log for details."
     exit 1
 fi
+find "$output_dir" -type f ! -name "coverage.txt" -exec rm -f {} +
 
-# Final success message
-echo_info "Coverage estimation completed successfully."
