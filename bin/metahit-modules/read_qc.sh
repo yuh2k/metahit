@@ -128,7 +128,7 @@ bbduk.sh -Xmx16g \
     out1="${out}/step1_adptrim_1.fastq" \
     out2="${out}/step1_adptrim_2.fastq" \
     ref="$ref" \
-    ktrim=r k=23 mink=11 hdist=1 tpe tbo \
+    ktrim=r k=23 mink=11 hdist=1 \
     minlen="$minlen" \
     threads="$threads" \
         gzip=true
