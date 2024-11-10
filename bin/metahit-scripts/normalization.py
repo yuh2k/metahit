@@ -40,10 +40,7 @@ class Normalization:
         self.contig_info = self.contig_info[self.contig_info['length'] >= self.min_len].reset_index(drop=True)
 
         # Load contact matrix
-        contact_matrix_full = load_npz(contact_matrix_file).tocoo()
-
-        # No need to reindex if indices match
-        self.contact_matrix = contact_matrix_full
+        self.contact_matrix = load_npz(contact_matrix_file).tocoo()
 
         # Make output folder
         os.makedirs(self.output_path, exist_ok=True)
@@ -122,6 +119,9 @@ class Normalization:
             return None
 
     def hiczin(self, epsilon=1):
+        if 'coverage' not in self.contig_info.columns:
+            raise ValueError("Coverage column is missing in the contig file. Please provide a contig file with coverage data for HiCzin normalization.")
+
         try:
             contact_matrix = self.contact_matrix.copy()
             contact_matrix.setdiag(0)
@@ -236,11 +236,11 @@ class Normalization:
 
 
     def metator(self, epsilon=1):
-        """
-        Perform MetaTOR normalization.
-        """
+        if 'coverage' not in self.contig_info.columns:
+            raise ValueError("Coverage column is missing in the contig file. Please provide a contig file with coverage data for MetaTOR normalization.")
+
         try:
-            covcc = self.contact_matrix.tocsr().diagonal() #MetaTOR use coverage instead of within-contig contacts (i.e., covcc)
+            covcc = self.contact_matrix.tocsr().diagonal()
             covcc = covcc + epsilon
             # Normalize contact values
             normalized_data = []

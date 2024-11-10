@@ -18,18 +18,33 @@ def ensure_dir_exists(directory):
 def absolute_path(path):
     return os.path.abspath(path)
 
+def find_fastq(filepath):
+    """Detect if a file exists with either .fastq or .fastq.gz extension."""
+    for ext in ["", ".gz"]:
+        if os.path.exists(filepath + ext):
+            return filepath + ext
+    raise FileNotFoundError(f"{filepath} or {filepath}.gz not found.")
+
 def readqc(args):
     print("[INFO] Running Read QC")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-    command = f"./bin/metahit-modules/read_qc.sh -1 {absolute_path(args.r1)} -2 {absolute_path(args.r2)} -o {output_dir} -t {args.threads}"
+    r1_path = find_fastq(args.r1)
+    r2_path = find_fastq(args.r2)
+    command = f"./bin/metahit-modules/read_qc.sh -1 {r1_path} -2 {r2_path} -o {output_dir} -t {args.threads}"
+    if args.xmx:
+        command += f" --xmx {args.xmx}"
+    if args.ftm:
+        command += f" --ftm {args.ftm}"
     run_command(command)
 
 def assembly(args):
     print("[INFO] Running Assembly")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-    command = f"./bin/metahit-modules/assembly.sh -1 {absolute_path(args.r1)} -2 {absolute_path(args.r2)} -o {output_dir} -m {args.memory} -t {args.threads}"
+    r1_path = find_fastq(args.r1)
+    r2_path = find_fastq(args.r2)
+    command = f"./bin/metahit-modules/assembly.sh -1 {r1_path} -2 {r2_path} -o {output_dir} -m {args.memory} -t {args.threads}"
     if args.megahit:
         command += f" --megahit --k-min {args.k_min} --k-max {args.k_max} --k-step {args.k_step}"
     elif args.metaspades:
@@ -41,7 +56,9 @@ def alignment(args):
     print("[INFO] Running Alignment")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-    command = f"./bin/metahit-modules/alignment.sh -r {absolute_path(args.ref)} -1 {absolute_path(args.r1)} -2 {absolute_path(args.r2)} -o {output_dir} --threads {args.threads}"
+    r1_path = find_fastq(args.r1)
+    r2_path = find_fastq(args.r2)
+    command = f"./bin/metahit-modules/alignment.sh -r {absolute_path(args.ref)} -1 {r1_path} -2 {r2_path} -o {output_dir} --threads {args.threads}"
     if args.samtools_filter:
         command += f" --samtools-filter '{args.samtools_filter}'"
     run_command(command)
@@ -50,7 +67,9 @@ def coverage_estimation(args):
     print("[INFO] Running Coverage Estimation")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-    command = f"./bin/metahit-modules/coverage_estimation.sh -1 {absolute_path(args.r1)} -2 {absolute_path(args.r2)} -r {absolute_path(args.ref)} -o {output_dir}"
+    r1_path = find_fastq(args.r1)
+    r2_path = find_fastq(args.r2)
+    command = f"./bin/metahit-modules/coverage_estimation.sh -1 {r1_path} -2 {r2_path} -r {absolute_path(args.ref)} -o {output_dir}"
     run_command(command)
 
 def raw_contact(args):
@@ -83,6 +102,8 @@ def main():
     qc_parser.add_argument("-2", dest="r2", required=True, help="Path to R2 reads file")
     qc_parser.add_argument("-o", "--output", required=True, help="Output directory")
     qc_parser.add_argument("-t", "--threads", type=int, default=4, help="Number of threads")
+    qc_parser.add_argument("--xmx", help="Memory for Java in BBDuk (default is 60% of system memory)")
+    qc_parser.add_argument("--ftm", type=int, help="ftm value for BBDuk (default=5)")
 
     # Assembly
     asm_parser = subparsers.add_parser("assembly")

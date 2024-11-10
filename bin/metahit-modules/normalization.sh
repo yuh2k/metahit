@@ -21,10 +21,6 @@ shift 1
 # Path to the normalization.py script
 NORMALIZATION_SCRIPT="./bin/metahit-scripts/normalization.py"
 
-# Activate Conda environment
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate metahit_env
-
 # Execute the corresponding Python command
 python "$NORMALIZATION_SCRIPT" "$COMMAND" "$@"
 
