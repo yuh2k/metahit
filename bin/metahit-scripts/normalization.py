@@ -234,11 +234,17 @@ class Normalization:
             print(f"Error during bin3C normalization: {e}")
             return None
 
-
-    def metator(self, epsilon=1):
-        if 'coverage' not in self.contig_info.columns:
-            raise ValueError("Coverage column is missing in the contig file. Please provide a contig file with coverage data for MetaTOR normalization.")
-
+    def MetaTOR(self, epsilon=1):
+        """
+        Perform FastNorm normalization.
+        """
+        raw_contacts/geometric mean of (coverage_i * coverage_j)
+        denoise
+        
+    def FastNorm(self, epsilon=1):
+        """
+        Perform FastNorm normalization.
+        """
         try:
             covcc = self.contact_matrix.tocsr().diagonal()
             covcc = covcc + epsilon
