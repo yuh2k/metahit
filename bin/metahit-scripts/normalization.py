@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 import os
 import sys
@@ -234,21 +234,59 @@ class Normalization:
             print(f"Error during bin3C normalization: {e}")
             return None
 
-    def MetaTOR(self, epsilon=1):
+    def metator(self, epsilon=1):
         """
-        Perform FastNorm normalization.
+        Perform MetaTOR normalization using coverage information.
+        This method normalizes contact values using the geometric mean of coverage.
         """
-        raw_contacts/geometric mean of (coverage_i * coverage_j)
-        denoise
+        try:
+            # Check if coverage column exists
+            if 'coverage' not in self.contig_info.columns:
+                raise ValueError("Coverage column is missing in the contig file. Please provide coverage data.")
+
+            contact_matrix = self.contact_matrix.copy()
+            contact_matrix.setdiag(0)  # Ensure diagonal is set to zero
+
+            # Extract coverage information from the contig_info DataFrame
+            coverage = self.contig_info['coverage'].values + epsilon  # Add epsilon to avoid division by zero
+
+            # Normalize contact values using the geometric mean of coverage
+            normalized_data = []
+            for i, j, v in zip(contact_matrix.row, contact_matrix.col, contact_matrix.data):
+                cov_i = coverage[i]
+                cov_j = coverage[j]
+                norm_factor = np.sqrt(cov_i * cov_j)  # Geometric mean normalization
+                normalized_value = v / norm_factor
+                normalized_data.append(normalized_value)
+
+            # Create the normalized contact matrix
+            normalized_contact_matrix = coo_matrix(
+                (normalized_data, (contact_matrix.row, contact_matrix.col)),
+                shape=contact_matrix.shape
+            )
+
+            # Denoise the normalized matrix and save it
+            self.denoise(normalized_contact_matrix, 'metator')
+
+            del contact_matrix, normalized_contact_matrix
+
+        except Exception as e:
+            print(f"Error during MetaTOR normalization: {e}")
+            return None
+
         
-    def FastNorm(self, epsilon=1):
+    def fastnorm(self, epsilon=1):
         """
         Perform FastNorm normalization.
         """
         try:
+            print("[INFO] Running FastNorm normalization")
+
+            # Extract diagonal coverage values
             covcc = self.contact_matrix.tocsr().diagonal()
             covcc = covcc + epsilon
-            # Normalize contact values
+
+            # Initialize list for normalized data
             normalized_data = []
             for i, j, v in zip(self.contact_matrix.row, self.contact_matrix.col, self.contact_matrix.data):
                 cov_i = covcc[i]
@@ -257,17 +295,28 @@ class Normalization:
                 normalized_value = v / norm_factor
                 normalized_data.append(normalized_value)
 
-            # Create normalized contact matrix
+            # Check if normalized_data is empty
+            if not normalized_data:
+                print("[WARNING] No normalized data generated.")
+                return None
+
+            print(f"[INFO] Number of normalized contacts: {len(normalized_data)}")
+
+            # Create the normalized contact matrix
             normalized_contact_matrix = coo_matrix(
                 (normalized_data, (self.contact_matrix.row, self.contact_matrix.col)),
                 shape=self.contact_matrix.shape
             )
 
-            self.denoise(normalized_contact_matrix, 'metator')
+            # Save the denoised matrix
+            self.denoise(normalized_contact_matrix, 'fastnorm')
+
+            print("[INFO] FastNorm normalization completed successfully")
 
         except Exception as e:
-            print(f"Error during MetaTOR normalization: {e}")
+            print(f"[ERROR] Error during FastNorm normalization: {e}")
             return None
+
 
     def denoise(self, _norm_matrix, suffix):
         try:
@@ -278,23 +327,23 @@ class Normalization:
             denoised_matrix_file = os.path.join(self.output_path, f'denoised_contact_matrix_{suffix}.npz')
 
             if _norm_matrix.nnz == 0:
-                print(f"Warning: The contact matrix '{suffix}' is empty. Skipping denoising.")
+                print(f"[WARNING] The contact matrix '{suffix}' is empty. Skipping denoising.")
                 # Save an empty matrix
                 denoised_contact_matrix = coo_matrix(_norm_matrix.shape)
                 save_npz(denoised_matrix_file, denoised_contact_matrix)
-                print(f"Empty denoised contact matrix saved to {denoised_matrix_file}")
+                print(f"[INFO] Empty denoised contact matrix saved to {denoised_matrix_file}")
                 return denoised_contact_matrix
 
             # Calculate threshold to discard lowest p percent
             if self.thres <= 0 or self.thres >= 100:
-                print("Error: The threshold percentage for spurious contact detection must be between 0 and 100.")
+                print("[ERROR] The threshold percentage for spurious contact detection must be between 0 and 100.")
                 return None
 
             threshold = np.percentile(_norm_matrix.data, self.thres)
             mask = _norm_matrix.data > threshold
 
             if not np.any(mask):
-                print(f"Warning: No contacts exceed the threshold in '{suffix}'. Denoised matrix will be empty.")
+                print(f"[WARNING] No contacts exceed the threshold in '{suffix}'. Denoised matrix will be empty.")
                 denoised_contact_matrix = coo_matrix(_norm_matrix.shape)
             else:
                 denoised_contact_matrix = coo_matrix(
@@ -304,12 +353,30 @@ class Normalization:
 
             # Save denoised contact matrix
             save_npz(denoised_matrix_file, denoised_contact_matrix)
-            print(f"Denoised normalized contact matrix '{suffix}' saved to {denoised_matrix_file}")
+            print(f"[INFO] Denoised normalized contact matrix '{suffix}' saved to {denoised_matrix_file}")
 
             return denoised_contact_matrix
+
         except Exception as e:
-            print(f"Error during denoising normalization for '{suffix}': {e}")
+            print(f"[ERROR] Error during denoising normalization for '{suffix}': {e}")
             return None
+        
+    def run_refinement(self, method):
+        """Run refinement method after normalization."""
+        print(f"[INFO] Running refinement using method: {method}")
+
+        contig_file = os.path.join(self.output_path, 'contig_info.csv')
+        hic_matrix_file = os.path.join(self.output_path, 'denoised_contact_matrix.npz')
+
+        if method == 'metacc':
+            os.system(f"python3 ./bin_refinement.py --method metacc --contig_file {contig_file} --hic_matrix {hic_matrix_file} --outdir {self.output_path}")
+        elif method == 'bin3c':
+            os.system(f"python3 ./bin_refinement.py --method bin3c --contig_file {contig_file} --hic_matrix {hic_matrix_file} --outdir {self.output_path}")
+        elif method == 'imputecc':
+            os.system(f"python3 ./bin_refinement.py --method imputecc --contig_file {contig_file} --hic_matrix {hic_matrix_file} --outdir {self.output_path}")
+        else:
+            print(f"[ERROR] Unknown refinement method: {method}")
+
 
     def _bisto_seq(self, m , max_iter, tol, x0=None, delta=0.1, Delta=3):
         _orig = m.copy()
@@ -418,7 +485,7 @@ def main():
     parser_normcc = subparsers.add_parser('normcc', help='Perform normCC normalization')
     parser_normcc.add_argument('--contig_file', '-c', required=True, help='Path to contig_info.csv')
     parser_normcc.add_argument('--contact_matrix_file', '-m', required=True, help='Path to contact_matrix.npz')
-    parser_normcc.add_argument('--output_path', '-o', required=True, help='Output directory')
+    parser_normcc.add_argument('--output', '-o', required=True, help='Output directory')
     parser_normcc.add_argument('--thres', type=float, default=5, help='Threshold percentage for denoising (0-100)')
 
 
@@ -426,7 +493,7 @@ def main():
     parser_hiczin = subparsers.add_parser('hiczin', help='Perform HiCzin normalization')
     parser_hiczin.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
     parser_hiczin.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
-    parser_hiczin.add_argument('-o', '--output_path', required=True, help='Output directory')
+    parser_hiczin.add_argument('-o', '--output', required=True, help='Output directory')
     parser_hiczin.add_argument('--epsilon', type=float, default=1, help='Epsilon value')
     parser_hiczin.add_argument('--thres', type=float, default=5, help='Threshold percentage for denoising (0-100)')
 
@@ -434,7 +501,7 @@ def main():
     parser_bin3c = subparsers.add_parser('bin3c', help='Perform bin3C normalization')
     parser_bin3c.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
     parser_bin3c.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
-    parser_bin3c.add_argument('-o', '--output_path', required=True, help='Output directory')
+    parser_bin3c.add_argument('-o', '--output', required=True, help='Output directory')
     parser_bin3c.add_argument('--epsilon', type=float, default=1, help='Epsilon value')
     parser_bin3c.add_argument('--max_iter', type=int, default=1000, help='Maximum iterations for Sinkhorn-Knopp')
     parser_bin3c.add_argument('--tol', type=float, default=1e-6, help='Tolerance for convergence')
@@ -444,10 +511,18 @@ def main():
     parser_metator = subparsers.add_parser('metator', help='Perform MetaTOR normalization')
     parser_metator.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
     parser_metator.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
-    parser_metator.add_argument('-o', '--output_path', required=True, help='Output directory')
+    parser_metator.add_argument('-o', '--output', required=True, help='Output directory')
     parser_metator.add_argument('--epsilon', type=float, default=1, help='Epsilon value')
     parser_metator.add_argument('--thres', type=float, default=5, help='Threshold percentage for denoising (0-100)')
 
+
+    # FastNorm
+    parser_fastnorm = subparsers.add_parser('fastnorm')
+    parser_fastnorm.add_argument('-c', '--contig_file', required=True)
+    parser_fastnorm.add_argument('-m', '--contact_matrix_file', required=True)
+    parser_fastnorm.add_argument('-o', '--output', required=True)
+    parser_fastnorm.add_argument('--epsilon', type=float, default=1)
+    parser_fastnorm.add_argument('--thres', type=float, default=5)
     args = parser.parse_args()
 
     if not args.command:
@@ -501,6 +576,16 @@ def main():
             thres=args.thres
         )
         normalizer.metator(epsilon=args.epsilon)
+    elif args.command == 'fastnorm':
+        normalizer.preprocess(
+            contig_file=args.contig_file,
+            contact_matrix_file=args.contact_matrix_file,
+            output_path=args.output_path,
+            min_len=args.min_len,
+            min_signal=args.min_signal,
+            thres=args.thres
+        )
+        normalizer.fastnorm(args.epsilon)
 
 if __name__ == "__main__":
     main()

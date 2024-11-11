@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-
+#!/usr/bin/env python
 import argparse
 import subprocess
 import os
@@ -85,12 +84,24 @@ def normalization(args):
     print(f"[INFO] Running {args.method} Normalization")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-    command = f"./bin/metahit-modules/normalization.sh {args.method} --contig_file {absolute_path(args.contig_file)} --contact_matrix_file {absolute_path(args.contact_matrix_file)} --output_path {output_dir} --thres {args.thres}"
+
+    # Construct the normalization command
+    command = f"./bin/metahit-modules/normalization.sh {args.method} --contig_file {absolute_path(args.contig_file)} --contact_matrix_file {absolute_path(args.contact_matrix_file)} --output {output_dir} --thres {args.thres}"
+
     if args.method == "bin3c":
         command += f" --max_iter {args.max_iter} --tol {args.tol}"
     elif args.method == "raw":
         command += f" --min_len {args.min_len} --min_signal {args.min_signal}"
+    elif args.method == "fastnorm":
+        command += f" --epsilon {args.epsilon}"
+
+    # Add refinement method if specified
+    if args.refinement_method:
+        command += f" --refinement_method {args.refinement_method}"
+    
     run_command(command)
+
+
 
 def main():
     parser = argparse.ArgumentParser(description="MetaHit Pipeline Command Line Interface")
@@ -143,9 +154,9 @@ def main():
     raw_parser.add_argument("--out", dest="output", required=True, help="Output directory")
     raw_parser.add_argument("--coverage", help="Path to coverage file")
 
-    # Normalization
+    # Normalization Command
     norm_parser = subparsers.add_parser("normalization")
-    norm_parser.add_argument("method", choices=["raw", "normcc", "hiczin", "bin3c", "metator"], help="Normalization method")
+    norm_parser.add_argument("method", choices=["raw", "normcc", "hiczin", "bin3c", "metator", "fastnorm"], help="Normalization method")
     norm_parser.add_argument("--contig_file", required=True, help="Path to contig info file")
     norm_parser.add_argument("--contact_matrix_file", required=True, help="Path to contact matrix file")
     norm_parser.add_argument("--output", required=True, help="Output directory")
@@ -154,6 +165,9 @@ def main():
     norm_parser.add_argument("--min_signal", type=int, default=1, help="Minimum signal (raw normalization)")
     norm_parser.add_argument("--max_iter", type=int, default=1000, help="Maximum iterations (bin3c normalization)")
     norm_parser.add_argument("--tol", type=float, default=1e-6, help="Tolerance (bin3c normalization)")
+    norm_parser.add_argument("--epsilon", type=float, default=1, help="Epsilon value (fastnorm)")
+    norm_parser.add_argument("--refinement_method", help="Refinement method (metacc, bin3c, imputecc)")
+    
 
     args = parser.parse_args()
 

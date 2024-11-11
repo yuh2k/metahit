@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Activate Conda environment
 source ~/anaconda3/etc/profile.d/conda.sh
@@ -10,42 +10,70 @@ SG_R2="./test_data/sim_sg_R2.fastq"
 HIC_R1="./test_data/sim_hic_r1.fq"
 HIC_R2="./test_data/sim_hic_r2.fq"
 OUTPUT_DIR="output"
+REFINEMENT_METHOD="metacc"
 
-# Run each command with the new Python CLI
+# Step 1: Read QC
+echo "[INFO] Running Read QC..."
+./metahit.py readqc -1 "$SG_R1" -2 "$SG_R2" -o "${OUTPUT_DIR}/readqc/sg" -t 4 --xmx 4g
+./metahit.py readqc -1 "$HIC_R1" -2 "$HIC_R2" -o "${OUTPUT_DIR}/readqc/hic" -t 4 --xmx 4g
 
-# Read QC
-./metahit.py readqc -1 "$SG_R1" -2 "$SG_R2" -o "${OUTPUT_DIR}/readqc/sg" -t 4
-./metahit.py readqc -1 "$HIC_R1" -2 "$HIC_R2" -o "${OUTPUT_DIR}/readqc/hic" -t 4
-
-# Assembly
+# Step 2: Assembly
+echo "[INFO] Running Assembly..."
 ./metahit.py assembly -1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq.gz" -2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq.gz" \
   -o "${OUTPUT_DIR}/assembly" -m 24 -t 4 --metaspades --k-list 21,33,55,77 -l 1000
 
-# Alignment
+# Step 3: Alignment
+echo "[INFO] Running Alignment..."
 ./metahit.py alignment -r "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
   -1 "${OUTPUT_DIR}/readqc/hic/final_reads_1.fastq.gz" -2 "${OUTPUT_DIR}/readqc/hic/final_reads_2.fastq.gz" \
   -o "${OUTPUT_DIR}/alignment" --threads 4 --samtools-filter '-F 0x904'
 
-# Coverage Estimation
-./metahit.py coverage_estimation -1 "$SG_R1" -2 "$SG_R2" -r "${OUTPUT_DIR}/assembly/final_assembly.fasta" -o "${OUTPUT_DIR}/estimation"
+# Step 4: Coverage Estimation
+echo "[INFO] Running Coverage Estimation..."
+./metahit.py coverage_estimation -1 "$SG_R1" -2 "$SG_R2" \
+  -r "${OUTPUT_DIR}/assembly/final_assembly.fasta" -o "${OUTPUT_DIR}/estimation"
 
-# Raw Contact Generation
-./metahit.py raw_contact --bam "${OUTPUT_DIR}/alignment/sorted_map.bam" --fasta "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
+# Step 5: Raw Contact Generation
+echo "[INFO] Generating Raw Contacts..."
+./metahit.py raw_contact --bam "${OUTPUT_DIR}/alignment/sorted_map.bam" \
+  --fasta "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
   --out "${OUTPUT_DIR}/normalization/raw" --coverage "${OUTPUT_DIR}/estimation/coverage.txt"
 
-# Normalization
-./metahit.py normalization raw --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
-  --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
-  --output "${OUTPUT_DIR}/normalization/raw_normalized" --min_len 500 --min_signal 1 --thres 5
-./metahit.py normalization normcc --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
-  --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
-  --output "${OUTPUT_DIR}/normalization/normcc" --thres 5
-./metahit.py normalization hiczin --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
-  --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
-  --output "${OUTPUT_DIR}/normalization/hiczin" --thres 5
-./metahit.py normalization bin3c --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
-  --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
-  --output "${OUTPUT_DIR}/normalization/bin3c" --max_iter 1000 --tol 1e-6 --thres 5
-./metahit.py normalization metator --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
-  --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
-  --output "${OUTPUT_DIR}/normalization/metator" --thres 5
+# Step 6: Normalization with optional refinement
+echo "[INFO] Running Normalization with refinement..."
+for method in raw normcc hiczin bin3c metator fastnorm; do
+  output_dir="${OUTPUT_DIR}/normalization/${method}"
+
+  # Ensure output directory exists
+  mkdir -p "$output_dir"
+
+  case $method in
+    raw)
+      ./metahit.py normalization raw --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
+        --output "$output_dir" --min_len 500 --min_signal 1 --thres 5 --refinement_method "$REFINEMENT_METHOD"
+      ;;
+    normcc|hiczin|metator)
+      ./metahit.py normalization $method --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
+        --output "$output_dir" --thres 5 --refinement_method "$REFINEMENT_METHOD"
+      ;;
+    bin3c)
+      ./metahit.py normalization bin3c --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
+        --output "$output_dir" --max_iter 1000 --tol 1e-6 --thres 5 --refinement_method "$REFINEMENT_METHOD"
+      ;;
+    fastnorm)
+      ./metahit.py normalization fastnorm --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
+        --output "$output_dir" --epsilon 1 --thres 5 --refinement_method "$REFINEMENT_METHOD"
+      ;;
+  esac
+
+  if [ $? -ne 0 ]; then
+    echo "[ERROR] Normalization failed for method $method."
+    exit 1
+  fi
+done
+
+echo "[INFO] All steps completed successfully."
