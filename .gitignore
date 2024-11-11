@@ -3,6 +3,7 @@ ref
 output
 ref
 bin/metahit-scripts/__pycache__/
+bin/metahit-scripts/bin3C_python3/mzd/__pycache__/
 external
 .DS_Store
 comments.txt
