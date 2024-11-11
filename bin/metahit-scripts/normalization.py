@@ -485,7 +485,7 @@ def main():
     parser_normcc = subparsers.add_parser('normcc', help='Perform normCC normalization')
     parser_normcc.add_argument('--contig_file', '-c', required=True, help='Path to contig_info.csv')
     parser_normcc.add_argument('--contact_matrix_file', '-m', required=True, help='Path to contact_matrix.npz')
-    parser_normcc.add_argument('--output', '-o', required=True, help='Output directory')
+    parser_normcc.add_argument('--output_path', '-o', required=True, help='Output directory')
     parser_normcc.add_argument('--thres', type=float, default=5, help='Threshold percentage for denoising (0-100)')
 
 
@@ -493,7 +493,7 @@ def main():
     parser_hiczin = subparsers.add_parser('hiczin', help='Perform HiCzin normalization')
     parser_hiczin.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
     parser_hiczin.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
-    parser_hiczin.add_argument('-o', '--output', required=True, help='Output directory')
+    parser_hiczin.add_argument('-o', '--output_path', required=True, help='Output directory')
     parser_hiczin.add_argument('--epsilon', type=float, default=1, help='Epsilon value')
     parser_hiczin.add_argument('--thres', type=float, default=5, help='Threshold percentage for denoising (0-100)')
 
@@ -501,7 +501,7 @@ def main():
     parser_bin3c = subparsers.add_parser('bin3c', help='Perform bin3C normalization')
     parser_bin3c.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
     parser_bin3c.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
-    parser_bin3c.add_argument('-o', '--output', required=True, help='Output directory')
+    parser_bin3c.add_argument('-o', '--output_path', required=True, help='Output directory')
     parser_bin3c.add_argument('--epsilon', type=float, default=1, help='Epsilon value')
     parser_bin3c.add_argument('--max_iter', type=int, default=1000, help='Maximum iterations for Sinkhorn-Knopp')
     parser_bin3c.add_argument('--tol', type=float, default=1e-6, help='Tolerance for convergence')
@@ -511,7 +511,7 @@ def main():
     parser_metator = subparsers.add_parser('metator', help='Perform MetaTOR normalization')
     parser_metator.add_argument('-c', '--contig_file', required=True, help='Path to contig_info.csv')
     parser_metator.add_argument('-m', '--contact_matrix_file', required=True, help='Path to contact_matrix.npz')
-    parser_metator.add_argument('-o', '--output', required=True, help='Output directory')
+    parser_metator.add_argument('-o', '--output_path', required=True, help='Output directory')
     parser_metator.add_argument('--epsilon', type=float, default=1, help='Epsilon value')
     parser_metator.add_argument('--thres', type=float, default=5, help='Threshold percentage for denoising (0-100)')
 
@@ -520,7 +520,7 @@ def main():
     parser_fastnorm = subparsers.add_parser('fastnorm')
     parser_fastnorm.add_argument('-c', '--contig_file', required=True)
     parser_fastnorm.add_argument('-m', '--contact_matrix_file', required=True)
-    parser_fastnorm.add_argument('-o', '--output', required=True)
+    parser_fastnorm.add_argument('-o', '--output_path', required=True)
     parser_fastnorm.add_argument('--epsilon', type=float, default=1)
     parser_fastnorm.add_argument('--thres', type=float, default=5)
     args = parser.parse_args()
@@ -581,8 +581,6 @@ def main():
             contig_file=args.contig_file,
             contact_matrix_file=args.contact_matrix_file,
             output_path=args.output_path,
-            min_len=args.min_len,
-            min_signal=args.min_signal,
             thres=args.thres
         )
         normalizer.fastnorm(args.epsilon)
