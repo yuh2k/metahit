@@ -1,0 +1,7 @@
+- "left reads":
+  - "/home/hh/Documents/metahit1018/metahit/output/readqc/sg/final_reads_1.fastq.gz"
+  "number": !!int "1"
+  "orientation": "fr"
+  "right reads":
+  - "/home/hh/Documents/metahit1018/metahit/output/readqc/sg/final_reads_2.fastq.gz"
+  "type": "paired-end"

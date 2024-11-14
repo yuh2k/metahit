@@ -1,6 +1,6 @@
 bbmapa
 ref
-output
+# output
 ref
 bin/metahit-scripts/__pycache__/
 bin/metahit-scripts/bin3C_python3/mzd/__pycache__/

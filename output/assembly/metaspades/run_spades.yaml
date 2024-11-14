@@ -1,0 +1,158 @@
+- STAGE: Before start
+  args: []
+  config_dir: ''
+  del_after:
+  - ../metaspades.tmp/hammer_tvs6e3cr
+  - .bin_reads
+  - ../metaspades.tmp/spades_nvutm_mi
+  - configs
+  output_files: []
+  path: 'true'
+  short_name: before_start
+- STAGE: Read error correction
+  args: []
+  config_dir: ''
+  del_after: []
+  output_files: []
+  path: 'true'
+  short_name: ec_start
+- STAGE: Read error correction
+  args:
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/corrected/configs/config.info
+  config_dir: corrected
+  del_after:
+  - ../metaspades.tmp/hammer_jek_fga_
+  output_files:
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/corrected/corrected.yaml
+  path: /home/hh/anaconda3/envs/metahit_env/bin/spades-hammer
+  short_name: ec_runtool
+- STAGE: corrected reads compression
+  args:
+  - /home/hh/anaconda3/envs/metahit_env/share/spades/spades_pipeline/scripts/compress_all.py
+  - --input_file
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/corrected/corrected.yaml
+  - --ext_python_modules_home
+  - /home/hh/anaconda3/envs/metahit_env/share/spades
+  - --max_threads
+  - '4'
+  - --output_dir
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/corrected
+  - --gzip_output
+  config_dir: ''
+  del_after: []
+  output_files: []
+  path: /home/linuxbrew/.linuxbrew/opt/python@3.12/bin/python3.12
+  short_name: ec_compress
+- STAGE: Read error correction
+  args: []
+  config_dir: ''
+  del_after: []
+  output_files: []
+  path: 'true'
+  short_name: ec_finish
+- STAGE: Assembling
+  args: []
+  config_dir: ''
+  del_after: []
+  output_files: []
+  path: 'true'
+  short_name: as_start
+- STAGE: K21
+  args:
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K21/configs/config.info
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K21/configs/mda_mode.info
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K21/configs/meta_mode.info
+  config_dir: K21
+  del_after: []
+  output_files: []
+  path: /home/hh/anaconda3/envs/metahit_env/bin/spades-core
+  short_name: k21
+- STAGE: K33
+  args:
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K33/configs/config.info
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K33/configs/mda_mode.info
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K33/configs/meta_mode.info
+  config_dir: K33
+  del_after: []
+  output_files: []
+  path: /home/hh/anaconda3/envs/metahit_env/bin/spades-core
+  short_name: k33
+- STAGE: K55
+  args:
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K55/configs/config.info
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K55/configs/mda_mode.info
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K55/configs/meta_mode.info
+  config_dir: K55
+  del_after: []
+  output_files: []
+  path: /home/hh/anaconda3/envs/metahit_env/bin/spades-core
+  short_name: k55
+- STAGE: K77
+  args:
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/configs/config.info
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/configs/mda_mode.info
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/configs/meta_mode.info
+  config_dir: K77
+  del_after: []
+  output_files: []
+  path: /home/hh/anaconda3/envs/metahit_env/bin/spades-core
+  short_name: k77
+- STAGE: Copy files
+  args:
+  - /home/hh/anaconda3/envs/metahit_env/share/spades/spades_pipeline/scripts/copy_files.py
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/before_rr.fasta
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/before_rr.fasta
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/assembly_graph_after_simplification.gfa
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/assembly_graph_after_simplification.gfa
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/final_contigs.fasta
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/contigs.fasta
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/first_pe_contigs.fasta
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/first_pe_contigs.fasta
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/strain_graph.gfa
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/strain_graph.gfa
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/scaffolds.fasta
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/scaffolds.fasta
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/scaffolds.paths
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/scaffolds.paths
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/assembly_graph_with_scaffolds.gfa
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/assembly_graph_with_scaffolds.gfa
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/assembly_graph.fastg
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/assembly_graph.fastg
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/K77/final_contigs.paths
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/contigs.paths
+  config_dir: ''
+  del_after:
+  - .bin_reads
+  - ../metaspades.tmp/spades_cqtblt_s
+  output_files: []
+  path: /home/linuxbrew/.linuxbrew/opt/python@3.12/bin/python3.12
+  short_name: copy_files
+- STAGE: Assembling
+  args: []
+  config_dir: ''
+  del_after: []
+  output_files: []
+  path: 'true'
+  short_name: as_finish
+- STAGE: Breaking scaffolds
+  args:
+  - /home/hh/anaconda3/envs/metahit_env/share/spades/spades_pipeline/scripts/breaking_scaffolds_script.py
+  - --result_scaffolds_filename
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/scaffolds.fasta
+  - --misc_dir
+  - /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/misc
+  - --threshold_for_breaking_scaffolds
+  - '3'
+  config_dir: ''
+  del_after: []
+  output_files: []
+  path: /home/linuxbrew/.linuxbrew/opt/python@3.12/bin/python3.12
+  short_name: bs
+- STAGE: Terminate
+  args: []
+  config_dir: ''
+  del_after:
+  - configs
+  output_files: []
+  path: 'true'
+  short_name: terminate

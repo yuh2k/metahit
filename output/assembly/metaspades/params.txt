@@ -1,0 +1,37 @@
+Command line: /home/hh/anaconda3/envs/metahit_env/bin/metaspades.py	--tmp-dir	/home/hh/Documents/metahit1018/metahit/output/assembly/metaspades.tmp	-k	21,33,55,77	-t	4	-m	24	-o	/home/hh/Documents/metahit1018/metahit/output/assembly/metaspades	-1	/home/hh/Documents/metahit1018/metahit/output/readqc/sg/final_reads_1.fastq.gz	-2	/home/hh/Documents/metahit1018/metahit/output/readqc/sg/final_reads_2.fastq.gz	
+
+System information:
+  SPAdes version: 4.0.0
+  Python version: 3.12.5
+  OS: Linux-6.8.0-48-generic-x86_64-with-glibc2.39
+
+Output dir: /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades
+Mode: read error correction and assembling
+Debug mode is turned OFF
+
+Dataset parameters:
+  Metagenomic mode
+  Reads:
+    Library number: 1, library type: paired-end
+      orientation: fr
+      left reads: ['/home/hh/Documents/metahit1018/metahit/output/readqc/sg/final_reads_1.fastq.gz']
+      right reads: ['/home/hh/Documents/metahit1018/metahit/output/readqc/sg/final_reads_2.fastq.gz']
+      interlaced reads: not specified
+      single reads: not specified
+      merged reads: not specified
+Read error correction parameters:
+  Iterations: 1
+  PHRED offset will be auto-detected
+  Corrected reads will be compressed
+Assembly parameters:
+  k: [21, 33, 55, 77]
+  Repeat resolution is enabled
+  Mismatch careful mode is turned OFF
+  MismatchCorrector will be SKIPPED
+  Coverage cutoff is turned OFF
+  Assembly graph output will use GFA v1.2 format
+Other parameters:
+  Dir for temp files: /home/hh/Documents/metahit1018/metahit/output/assembly/metaspades.tmp
+  Threads: 4
+  Memory limit (in Gb): 24
+

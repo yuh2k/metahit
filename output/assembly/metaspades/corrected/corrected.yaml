@@ -1,0 +1,9 @@
+- "left reads":
+  - "/home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/corrected/final_reads_1.fastq00.0_0.cor.fastq.gz"
+  "number": !!int "1"
+  "orientation": "fr"
+  "right reads":
+  - "/home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/corrected/final_reads_2.fastq00.0_0.cor.fastq.gz"
+  "single reads":
+  - "/home/hh/Documents/metahit1018/metahit/output/assembly/metaspades/corrected/final_reads__unpaired00.0_0.cor.fastq.gz"
+  "type": "paired-end"
