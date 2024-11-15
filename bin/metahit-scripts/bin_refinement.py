@@ -1,143 +1,86 @@
-#!/usr/bin/env python
-import os
-os.environ['NUMBA_DISABLE_JIT'] = '1'
-
+#!/usr/bin/env python3
 
 import os
 import argparse
 import logging
-import shutil
-import scipy.sparse as scisp
-import sys
-from MetaCC.Script.normalized_contact import NormCCMap
+from MetaCC.Script.utils import load_object, save_object, make_dir, gen_bins
 from MetaCC.Script.cluster import ClusterBin
-from MetaCC.Script.utils import gen_bins
-from bin3C_python3.mzd.cluster import cluster_map, cluster_report, write_fasta
 from ImputeCC.Script.imputation import ImputeMatrix
-from ImputeCC.Script.pre_clustering import PreCluster
 from ImputeCC.Script.final_cluster import FinalCluster
-import pandas as pd
+from ImputeCC.Script.pre_clustering import PreCluster
+from bin3C_python3.mzd.cluster import cluster_map, write_report, write_fasta
+from Bio import SeqIO
 
-import argparse
-import pandas as pd
+def setup_logging(output_dir):
+    log_path = os.path.join(output_dir, 'bin_refinement.log')
+    logging.basicConfig(filename=log_path, level=logging.DEBUG,
+                        format='%(levelname)s: %(message)s')
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    logging.getLogger('').addHandler(console)
+    return logging.getLogger()
 
-def load_contig_info(file_path):
-    print(f"Loading contig info from: {file_path}")
-    try:
-        contig_info = pd.read_csv(file_path)
-        print(f"Successfully loaded contig info with shape: {contig_info.shape}")
-        return contig_info
-    except Exception as e:
-        print(f"Failed to load contig_info.csv: {e}")
-        raise
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="Run Binning Refinement")
-    parser.add_argument('--method', choices=['metacc', 'bin3c', 'imputecc'], required=True, help='Choose refinement method')
-    parser.add_argument('--contig_file', required=True, help='Path to contig_info.csv')
-    parser.add_argument('--hic_matrix', required=True, help='Path to Hi-C normalized matrix (.npz)')
-    parser.add_argument('--output', required=True, help='Output directory')
-    parser.add_argument('--fasta', help='Path to reference FASTA (required for bin3C)')
-    parser.add_argument('--num_gene', type=int, help='Number of marker genes detected')
-    parser.add_argument('--seed', type=int, default=None, help='Random seed')
-    return parser.parse_args()
-
-# Parse the arguments
-args = parse_arguments()
-
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('refinement')
-
-def run_metacc_refinement(contig_file, hic_matrix, outdir, num_gene=None, seed=None):
-    logger.info("Starting MetaCC refinement...")
+def generate_bins(args, logger):
+    # 加载 contig 信息和 Hi-C 矩阵
+    contig_info = load_object(args.contig_file)
+    hic_matrix = load_object(args.contact_matrix_file)
     
-    # Step 1: Load contig_info.csv
-    try:
-        contig_info = pd.read_csv(contig_file, names=['name', 'sites', 'length', 'covcc'])
-        if contig_info.empty or contig_info.isnull().values.any():
-            raise ValueError("contig_info.csv is empty or contains NaN values")
-        logger.info(f"Loaded contig_info with shape: {contig_info.shape}")
-    except Exception as e:
-        logger.error(f"Failed to load contig_info.csv: {e}")
-        sys.exit(1)
-    
-    # Step 2: Load the Hi-C contact matrix from .npz file
-    try:
-        logger.info(f"Loading Hi-C matrix from: {hic_matrix}")
-        seq_map = scisp.load_npz(hic_matrix)
-        if seq_map is None or seq_map.shape[0] == 0:
-            raise ValueError("Loaded contact matrix is empty or None")
-        logger.info(f"Loaded contact matrix with shape: {seq_map.shape}")
-    except Exception as e:
-        logger.error(f"Failed to load Hi-C matrix: {e}")
-        sys.exit(1)
-    
-    # Step 3: Initialize NormCCMap
-    try:
-        norm_result = None  # Replace this with actual norm_result calculation if needed
-        thres = 5  # Example threshold value, adjust as needed
-        norm_result_obj = NormCCMap(outdir, contig_info, seq_map, norm_result, thres)
-    except Exception as e:
-        logger.error(f"Failed to initialize NormCCMap: {e}")
-        sys.exit(1)
+    # Step 1: 生成 MetaCC Bins
+    logger.info('Generating bins using MetaCC...')
+    cluster_process = ClusterBin(args.output, contig_info['name'], contig_info['len'],
+                                 hic_matrix, args.min_binsize, args.num_gene, args.seed)
+    gen_bins(args.fasta, os.path.join(args.output, 'metacc_bins'), os.path.join(args.output, 'BIN'))
 
-    # Step 4: Perform clustering
-    try:
-        cluster_process = ClusterBin(outdir, norm_result_obj.name, norm_result_obj.len, norm_result_obj.seq_map, num_gene=num_gene, seed=seed)
-        gen_bins(contig_file, os.path.join(outdir, 'cluster.txt'), os.path.join(outdir, 'BIN'))
-    except Exception as e:
-        logger.error(f"Clustering process failed: {e}")
-        sys.exit(1)
-    
-    logger.info("MetaCC refinement finished.")
+    # Step 2: 使用 Bin3C 方法生成 Bins
+    logger.info('Generating bins using Bin3C...')
+    clustering = cluster_map(hic_matrix, method='infomap', seed=args.seed, work_dir=args.output)
+    write_report(hic_matrix, clustering, is_spades=not args.no_spades)
+    write_fasta(hic_matrix, args.output, clustering, source_fasta=args.fasta, clobber=True)
 
+    # Step 3: 使用 ImputeCC 方法生成 Bins
+    logger.info('Generating bins using ImputeCC...')
+    impute_matrix = ImputeMatrix(contig_info, hic_matrix, args.marker_file,
+                                 gene_cov=args.gene_cov, rwr_rp=args.rwr_rp, rwr_thres=args.rwr_thres)
+    save_object(os.path.join(args.output, 'ImputeCC_storage'), impute_matrix)
+    pre_bins, _ = PreCluster(impute_matrix.marker_contig_counts, impute_matrix.marker_contigs,
+                             impute_matrix.contig_markers, impute_matrix.imputed_matrix)
+    final_cluster = FinalCluster(impute_matrix.contig_info, pre_bins)
+    gen_bins(args.fasta, os.path.join(args.output, 'imputecc_bins'), os.path.join(args.output, 'FINAL_BIN'))
 
-def run_bin3c_refinement(hic_matrix, outdir, fasta_file, seed=None):
-    logger.info("Starting bin3C refinement...")
-    clustering = cluster_map(hic_matrix, method='infomap', seed=seed, work_dir=outdir)
-    cluster_report(hic_matrix, clustering)
-    write_fasta(hic_matrix, outdir, clustering, source_fasta=fasta_file)
-    logger.info("bin3C refinement finished.")
-
-def run_imputecc_refinement(contig_info, hic_matrix, outdir, num_gene=None, seed=None):
-    logger.info("Starting ImputeCC refinement...")
-    imputer = ImputeMatrix(contig_info, hic_matrix)
-    bins, bin_of_contigs = PreCluster(imputer.marker_contig_counts, imputer.marker_contigs, imputer.contig_markers)
-    cluster_process = FinalCluster(imputer.contig_info, imputer.contig_local, 
-                                   imputer.dict_contigRev, imputer.dict_contigRevLocal, 
-                                   imputer.dict_contig_len, imputer.contig_markers, bins, bin_of_contigs,
-                                   imputer.normcc_matrix, imputer.imputed_matrix)
-    gen_bins(contig_info, os.path.join(outdir, 'cluster_imputecc.txt'), os.path.join(outdir, 'FINAL_BIN'))
-    logger.info("ImputeCC refinement finished.")
+def refine_bins(args, logger):
+    # 使用 MetaWRAP 进行 Bin Refinement
+    logger.info('Refining bins using MetaWRAP...')
+    metawrap_cmd = f"metaWRAP bin_refinement -t {args.threads} -c 50 -o {args.output}/refined_bins " \
+                   f"-A {args.output}/BIN -B {args.output}/FINAL_BIN -C {args.output}/fasta"
+    os.system(metawrap_cmd)
 
 def main():
-    parser = argparse.ArgumentParser(description="Run Binning Refinement")
-    parser.add_argument('--method', choices=['metacc', 'bin3c', 'imputecc'], required=True, help='Choose refinement method')
-    parser.add_argument('--contig_file', required=True, help='Path to contig_info.csv')
-    parser.add_argument('--hic_matrix', required=True, help='Path to Hi-C normalized matrix (.npz)')
-    parser.add_argument('--outdir', required=True, help='Output directory')
-    parser.add_argument('--fasta', help='Path to reference FASTA (required for bin3C)')
-    parser.add_argument('--num_gene', type=int, help='Number of marker genes detected')
-    parser.add_argument('--seed', type=int, default=None, help='Random seed')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--fasta', required=True, help='Input FASTA file')
+    parser.add_argument('--contig_file', required=True, help='Path to contig info file')
+    parser.add_argument('--contact_matrix_file', required=True, help='Path to Hi-C contact matrix file')
+    parser.add_argument('--output', required=True, help='Output directory')
+    parser.add_argument('--marker_file', help='Path to marker gene file')
+    parser.add_argument('--min_binsize', type=int, default=150000, help='Minimum bin size')
+    parser.add_argument('--num_gene', type=int, help='Number of marker genes')
+    parser.add_argument('--threads', type=int, default=30, help='Number of threads')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    parser.add_argument('--gene_cov', type=float, default=0.9, help='Gene coverage')
+    parser.add_argument('--rwr_rp', type=float, default=0.5, help='Random walk restart probability')
+    parser.add_argument('--rwr_thres', type=int, default=80, help='RWR threshold')
+    parser.add_argument('--no_spades', action='store_true', help='Assembly was not done using SPAdes')
+
     args = parser.parse_args()
 
-    os.makedirs(args.outdir, exist_ok=True)
+    # Setup logging
+    logger = setup_logging(args.output)
 
-    if args.method == 'metacc':
-        run_metacc_refinement(args.contig_file, args.hic_matrix, args.outdir, args.num_gene, args.seed)
-    elif args.method == 'bin3c':
-        if not args.fasta:
-            raise ValueError("FASTA file is required for bin3C refinement")
-        run_bin3c_refinement(args.hic_matrix, args.outdir, args.fasta, args.seed)
-    elif args.method == 'imputecc':
-        run_imputecc_refinement(args.contig_file, args.hic_matrix, args.outdir, args.num_gene, args.seed)
+    try:
+        generate_bins(args, logger)
+        refine_bins(args, logger)
+        logger.info('Bin generation and refinement completed successfully.')
+    except Exception as e:
+        logger.error(f'Error during bin refinement: {str(e)}')
 
-if __name__ == "__main__":
-    # Ensure args is defined before using it
-    args = parse_arguments()
-
-    # Load the contig information
-    contig_info = load_contig_info(args.contig_file)
-    print("Loaded contig information successfully.")
-
+if __name__ == '__main__':
+    main()
