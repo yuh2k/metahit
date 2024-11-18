@@ -1257,12 +1257,12 @@ if __name__ == '__main__':
         print(f"Error: {e}")
         sys.exit(1)
 
-    metacc_folder = os.path.join(output_dir, 'metacc')
+    metacc_folder = output_dir
     bin3c_folder = os.path.join(output_dir, 'bin3c')
     imputecc_folder = os.path.join(output_dir, 'imputecc')
 
     # Define metacc temp folder
-    metacc_temp_folder = os.path.join(metacc_folder, 'tmp')
+    metacc_temp_folder = os.path.join(output_dir, 'tmp')
 
     # Ensure the temp folder exists
     if not os.path.exists(metacc_temp_folder):
@@ -1282,20 +1282,20 @@ if __name__ == '__main__':
 
     
     
-    imputecc_temp_folder = os.path.join(imputecc_folder , 'tmp')
-    if not os.path.exists(imputecc_temp_folder):
-        os.mkdir(imputecc_temp_folder)
-    else:
-        shutil.rmtree(imputecc_temp_folder)           
-        os.mkdir(imputecc_temp_folder)
+    # imputecc_temp_folder = os.path.join(imputecc_folder , 'tmp')
+    # if not os.path.exists(imputecc_temp_folder):
+    #     os.mkdir(imputecc_temp_folder)
+    # else:
+    #     shutil.rmtree(imputecc_temp_folder)           
+    #     os.mkdir(imputecc_temp_folder)
     
     
     
     # Create Intermediate folder
     # Intermediate folder is not deleted
-    interm_folder = os.path.join(imputecc_folder, 'intermediate')
-    if not os.path.exists(interm_folder):
-        os.mkdir(interm_folder)
+    # interm_folder = os.path.join(imputecc_folder, 'intermediate')
+    # if not os.path.exists(interm_folder):
+    #     os.mkdir(interm_folder)
         
     
         
