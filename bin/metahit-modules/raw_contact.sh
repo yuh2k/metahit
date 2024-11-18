@@ -1,5 +1,4 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 # Help function to display usage
 function show_help {
     echo "Usage: $0 --bam BAM_FILE --fasta FASTA_FILE --out OUTPUT_DIR [--coverage COVERAGE_FILE]"

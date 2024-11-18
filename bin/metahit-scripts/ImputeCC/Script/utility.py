@@ -92,19 +92,14 @@ def open_output(file_name, append=False, compress=None, gzlevel=6):
         return io.BufferedWriter(io.FileIO(file_name, mode))
 
 
-def make_dir(path, exist_ok=False):
-    """
-    Convenience method for making directories with a standard logic.
-    An exception is raised when the specified path exists and is not a directory.
-    :param path: target path to create
-    :param exist_ok: if true, an existing directory is ok. Existing files will still cause an exception
-    """
-    if not os.path.exists(path):
-        os.mkdir(path)
-    elif not exist_ok:
-        raise IOError('output directory already exists!')
-    elif os.path.isfile(path):
-        raise IOError('output path already exists and is a file!')
+def make_dir(path):
+    abs_path = os.path.abspath(path)
+    if not os.path.exists(abs_path):
+        os.makedirs(abs_path, exist_ok=True)
+        print(f"Created directory: {abs_path}")
+    else:
+        print(f"Directory already exists: {abs_path}")
+
 
 
 def app_path(subdir, filename):
@@ -275,7 +270,7 @@ def random_walk_cpu(P, rp, perc, tol, num_marker_contig):
     row = np.arange(num_marker_contig)
     col = np.arange(num_marker_contig)
     data = np.ones(num_marker_contig)
-    I = scisp.coo_matrix((data, (row, col)), shape=(num_marker_contig, P.shape[0]), dtype=np.float32)
+    I = scisp.coo_matrix((data, (row, col)), shape=(num_marker_contig, P.shape[0]), dtype=float)
     Q = I.copy()
     delta_previous = 0
     for i in range(500):

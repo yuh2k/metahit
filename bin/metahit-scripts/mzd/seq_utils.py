@@ -114,7 +114,7 @@ class SiteCounter:
 
 class SequenceAnalyzer:
 
-    COV_TYPE = np.dtype([('index', int), ('status', np.bool_), ('node', float),
+    COV_TYPE = np.dtype([('index', int), ('status', bool_), ('node', float),
                          ('local', float), ('fold', float)])
 
     @staticmethod

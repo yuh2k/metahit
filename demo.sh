@@ -35,9 +35,11 @@ echo "[INFO] Running Coverage Estimation..."
 
 # Step 5: Raw Contact Generation
 echo "[INFO] Generating Raw Contacts..."
-./metahit.py raw_contact --bam "${OUTPUT_DIR}/alignment/sorted_map.bam" \
-  --fasta "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
-  --out "${OUTPUT_DIR}/normalization/raw" --coverage "${OUTPUT_DIR}/estimation/coverage.txt"
+./metahit.py raw_contact \
+    --bam "${OUTPUT_DIR}/alignment/sorted_map.bam" \
+    --fasta "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
+    --out "${OUTPUT_DIR}/normalization/raw" \
+    --enzyme "HindIII"
 
 # Step 6: Normalization with optional refinement
 echo "[INFO] Running Normalization with refinement..."
@@ -50,23 +52,34 @@ for method in raw normcc hiczin bin3c metator fastnorm; do
   case $method in
     raw)
       ./metahit.py normalization raw --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
-        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
-        --output "$output_dir" --min_len 500 --min_signal 1 --thres 5 --refinement_method "$REFINEMENT_METHOD"
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
+        --output "${OUTPUT_DIR}/normalization/raw" --min_len 500 --min_signal 1 --thres 1
       ;;
-    normcc|hiczin|metator)
+    normcc)
+      echo "[INFO] running normcc normalization"
       ./metahit.py normalization $method --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
-        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
-        --output "$output_dir" --thres 5 --refinement_method "$REFINEMENT_METHOD"
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
+        --output "${OUTPUT_DIR}/normalization/${method}" --thres 1
+      ;;
+    hiczin)
+      ./metahit.py normalization $method --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
+        --output "${OUTPUT_DIR}/normalization/${method}" --thres 1 --epsilon 1
+      ;;
+    metator)
+      ./metahit.py normalization $method --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
+        --output "${OUTPUT_DIR}/normalization/${method}" --thres 1 --epsilon 1
       ;;
     bin3c)
       ./metahit.py normalization bin3c --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
-        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
-        --output "$output_dir" --max_iter 1000 --tol 1e-6 --thres 5 --refinement_method "$REFINEMENT_METHOD"
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
+        --output "${OUTPUT_DIR}/normalization/bin3c" --max_iter 1000 --tol 1e-6 --thres 1
       ;;
     fastnorm)
       ./metahit.py normalization fastnorm --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
-        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/contact_matrix_user.npz" \
-        --output "$output_dir" --epsilon 1 --thres 5 --refinement_method "$REFINEMENT_METHOD"
+        --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
+        --output "${OUTPUT_DIR}/normalization/fastnorm" --epsilon 1 --thres 1
       ;;
   esac
 
@@ -76,4 +89,14 @@ for method in raw normcc hiczin bin3c metator fastnorm; do
   fi
 done
 
-echo "[INFO] All steps completed successfully."
+# Step 7: Binning
+# echo "[INFO] Running Binning Process..."
+# ./metahit.py binning --bam "${OUTPUT_DIR}/alignment/sorted_map.bam" \
+#   --fasta "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
+#   --coverage "${OUTPUT_DIR}/estimation/coverage.txt" \
+#   --output "${OUTPUT_DIR}/bins" \
+#   --enzymes HindIII \
+#   --num_gene 100 \
+#   --seed 42
+
+# echo "[INFO] All steps completed successfully."

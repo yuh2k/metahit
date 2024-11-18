@@ -54,7 +54,7 @@ class HiCzinMap:
         coeff = self.norm_result[0:4]  # 前四个回归系数
 
         self.seq_map = self.seq_map.tolil()
-        self.seq_map = self.seq_map.astype(np.float64)
+        self.seq_map = self.seq_map.astype(float)
         for x, y, d in _map_coor:
 
             s1 = self.site[x] if self.site[x] != 0 else 1

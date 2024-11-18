@@ -116,7 +116,7 @@ class ImputeMatrix:
         A = A - scisp.diags(A.diagonal())
         B = A + scisp.diags((A.sum(axis=0).A.ravel() == 0).astype(int))
         d = scisp.diags(1 / B.sum(axis=0).A.ravel())
-        P = d.dot(B).astype(np.float32)
+        P = d.dot(B).astype(float)
         Q = random_walk_cpu(P , self.rwr_rp , self.rwr_perc , 0.01 , _num_marker_contig)
 
         E = Q.copy()

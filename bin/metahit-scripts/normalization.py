@@ -8,7 +8,10 @@ import pandas as pd
 from scipy.sparse import save_npz, load_npz, coo_matrix, diags, isspmatrix_csr, spdiags
 import statsmodels.api as sm
 from collections.abc import Iterable
-
+from MetaCC.Script.normalized_contact import NormCCMap
+import pickle 
+import gzip
+from ImputeCC.Script.utility import save_object, load_object
 # Define the standardize function outside the class
 def standardize(array):
     std = np.std(array)
@@ -28,13 +31,26 @@ class Normalization:
         self.thres = thres
 
         # Load contig information
-        names = ['contig_name', 'sites', 'length', 'coverage']
         self.contig_info = pd.read_csv(
             contig_file,
-            header=None,
-            names=names,
-            dtype={'sites': float, 'length': float, 'coverage': float}
+            header=0
         )
+
+        # Rename columns to standard names
+        self.contig_info.rename(columns={
+            'name': 'name',
+            'sites': 'sites',
+            'length': 'length',
+            'covcc': 'covcc'
+        }, inplace=True)
+
+        # Ensure correct data types
+        self.contig_info['sites'] = self.contig_info['sites'].astype(float)
+        self.contig_info['length'] = self.contig_info['length'].astype(float)
+
+        # Handle missing 'coverage' column
+        if 'coverage' not in self.contig_info.columns:
+            self.contig_info['coverage'] = np.nan  
 
         # Filter contigs based on min_len
         self.contig_info = self.contig_info[self.contig_info['length'] >= self.min_len].reset_index(drop=True)
@@ -59,40 +75,78 @@ class Normalization:
 
     def normcc(self, epsilon=1):
         try:
+            print("[DEBUG] Starting normcc method")
+
+            # Step 1: Copy the contact matrix and prepare data
             contact_matrix = self.contact_matrix.copy()
+            print(f"[DEBUG] Contact matrix shape: {contact_matrix.shape}")
+            
+            # Extract coverage values from the diagonal
             covcc = contact_matrix.diagonal()
+            print(f"[DEBUG] Length of diagonal coverage (covcc): {len(covcc)}")
             contact_matrix.setdiag(0)
+
+            # Extract signal from the matrix
             signal = contact_matrix.max(axis=1).toarray().ravel()
+            print(f"[DEBUG] Length of signal array: {len(signal)}")
+
+            # Extract contig information
             site = self.contig_info['sites'].values
             length = self.contig_info['length'].values
+            print(f"[DEBUG] Length of site: {len(site)}")
+            print(f"[DEBUG] Length of length: {len(length)}")
 
-            # Debugging statements
-            print(f"Length of site: {len(site)}")
-            print(f"Length of length: {len(length)}")
-            print(f"Length of covcc: {len(covcc)}")
-            print(f"Length of signal: {len(signal)}")
+            # Check if lengths match
+            n_contigs = len(site)
+            if not (len(length) == n_contigs == len(covcc) == len(signal)):
+                print("[ERROR] Mismatch in array lengths.")
+                print(f"site: {len(site)}, length: {len(length)}, covcc: {len(covcc)}, signal: {len(signal)}")
+                return None
 
+            # Step 2: Create DataFrame for GLM
             contig_info_normcc = pd.DataFrame({
                 'site': site,
                 'length': length,
                 'covcc': covcc,
                 'signal': signal
             })
+            print("[DEBUG] DataFrame for GLM created successfully")
 
+            # Check for NaNs or Infs
+            if contig_info_normcc.isnull().any().any() or np.isinf(contig_info_normcc.values).any():
+                print("[ERROR] NaNs or Infs detected in contig_info_normcc.")
+                print(contig_info_normcc)
+                return None
+
+            # Step 3: Log transformation
+            print("[DEBUG] Performing GLM fitting")
             contig_info_normcc['sample_site'] = np.log(contig_info_normcc['site'] + epsilon)
             contig_info_normcc['sample_len'] = np.log(contig_info_normcc['length'])
             contig_info_normcc['sample_covcc'] = np.log(contig_info_normcc['covcc'] + epsilon)
             exog = contig_info_normcc[['sample_site', 'sample_len', 'sample_covcc']]
             endog = contig_info_normcc['signal']
             exog = sm.add_constant(exog)
-            glm_nb = sm.GLM(endog, exog, family=sm.families.NegativeBinomial(alpha=1))
-            res = glm_nb.fit(method="lbfgs")
-            norm_result = res.params.values
 
-            if norm_result is None:
-                print("normCC normalization failed.")
+            print("[DEBUG] GLM exog matrix:")
+            print(exog.head())
+
+            # Check for NaNs or Infs in the exog matrix
+            if np.isnan(exog.values).any() or np.isinf(exog.values).any():
+                print("[ERROR] exog contains NaNs or Infs")
                 return None
 
+            # Step 4: Fit the GLM model
+            glm_nb = sm.GLM(endog, exog, family=sm.families.NegativeBinomial(alpha=1))
+            res = glm_nb.fit()
+            norm_result = res.params.values
+            print(f"[DEBUG] GLM fitting results: {norm_result}")
+
+            if norm_result is None:
+                print("[ERROR] NormCC normalization failed.")
+                return None
+
+            # Step 5: Normalizing contact values
+            print("[DEBUG] Normalizing contact values")
             linear_predictor = np.dot(exog, norm_result)
             expected_signal = np.exp(linear_predictor)
             scal = np.max(expected_signal)
@@ -110,13 +164,37 @@ class Normalization:
                 (normalized_data, (contact_matrix.row, contact_matrix.col)),
                 shape=contact_matrix.shape
             )
+            print("[DEBUG] Normalized contact matrix created")
 
-            self.denoise(normalized_contact_matrix, 'normcc')
-            del contact_matrix, normalized_contact_matrix
+            # Step 6: Denoise the normalized matrix
+            denoised_normalized_contact_matrix = self.denoise(normalized_contact_matrix, 'normcc')
+            print(f"[DEBUG] Denoised normalized contact matrix nnz: {denoised_normalized_contact_matrix.nnz}")
+
+            if denoised_normalized_contact_matrix.nnz == 0:
+                print("[WARNING] Denoised normalized contact matrix is empty, skipping NormCCMap creation.")
+                return
+
+            # Step 7: Save the result as a NormCCMap object
+            normcc_map = NormCCMap(
+                path=self.output_path,
+                contig_info=self.contig_info,
+                seq_map=denoised_normalized_contact_matrix,
+                norm_result=norm_result,
+                thres=1
+            )
+            normcc_object_file = os.path.join(self.output_path, 'NormCC_normalized_contact.gz')
+            with gzip.open(normcc_object_file, 'wb') as f:
+                pickle.dump(normcc_map, f)
+            print(f"[INFO] NormCCMap object saved to {normcc_object_file}")
 
         except Exception as e:
-            print(f"Error during normCC normalization: {e}")
+            import traceback
+            traceback.print_exc()
+            print(f"[ERROR] Error during NormCC normalization: {e}")
             return None
+
+
+
 
     def hiczin(self, epsilon=1):
         if 'coverage' not in self.contig_info.columns:
@@ -360,22 +438,6 @@ class Normalization:
         except Exception as e:
             print(f"[ERROR] Error during denoising normalization for '{suffix}': {e}")
             return None
-        
-    def run_refinement(self, method):
-        """Run refinement method after normalization."""
-        print(f"[INFO] Running refinement using method: {method}")
-
-        contig_file = os.path.join(self.output_path, 'contig_info.csv')
-        hic_matrix_file = os.path.join(self.output_path, 'denoised_contact_matrix.npz')
-
-        if method == 'metacc':
-            os.system(f"python3 ./bin_refinement.py --method metacc --contig_file {contig_file} --hic_matrix {hic_matrix_file} --outdir {self.output_path}")
-        elif method == 'bin3c':
-            os.system(f"python3 ./bin_refinement.py --method bin3c --contig_file {contig_file} --hic_matrix {hic_matrix_file} --outdir {self.output_path}")
-        elif method == 'imputecc':
-            os.system(f"python3 ./bin_refinement.py --method imputecc --contig_file {contig_file} --hic_matrix {hic_matrix_file} --outdir {self.output_path}")
-        else:
-            print(f"[ERROR] Unknown refinement method: {method}")
 
 
     def _bisto_seq(self, m , max_iter, tol, x0=None, delta=0.1, Delta=3):

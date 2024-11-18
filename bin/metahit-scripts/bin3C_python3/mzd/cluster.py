@@ -88,7 +88,7 @@ def cluster_map(contact_map, seed, method='infomap', min_len=None, min_sig=None,
                     seq_id, cl_id = int(t[seq_col]), int(t[cl_col])
                 cl_map.setdefault(cl_id, []).append(seq_id)
             for k in cl_map:
-                cl_map[k] = np.array(cl_map[k], dtype=np.int)
+                cl_map[k] = np.array(cl_map[k], dtype=int)
             return cl_map
 
     def _read_tree(pathname):
@@ -115,7 +115,7 @@ def cluster_map(contact_map, seed, method='infomap', min_len=None, min_sig=None,
             # rename clusters and order descending in size
             desc_key = sorted(cl_map, key=lambda x: len(cl_map[x]), reverse=True)
             for n, k in enumerate(desc_key):
-                cl_map[n] = np.array(cl_map.pop(k), dtype=np.int)
+                cl_map[n] = np.array(cl_map.pop(k), dtype=int)
 
         return cl_map
 
@@ -216,13 +216,13 @@ def cluster_report(contact_map, clustering, source_fasta=None, is_spades=True):
 
             if is_spades:
                 report = np.array(list(zip(_len, _gc, _cov)),
-                                  dtype=[('length', np.int),
-                                         ('gc', np.float),
-                                         ('cov', np.float)])
+                                  dtype=[('length', int),
+                                         ('gc', float),
+                                         ('cov', float)])
             else:
                 report = np.array(list(zip(_len, _gc)),
-                                  dtype=[('length', np.int),
-                                         ('gc', np.float)])
+                                  dtype=[('length', int),
+                                         ('gc', float)])
             clustering[cl_id]['report'] = report
 
 
@@ -329,7 +329,7 @@ def enable_clusters(contact_map, clustering, cl_list=None, ordered_only=True, mi
     logger.info('Total number of sequences in the clustering: {}'.format(len(cmb_ord)))
 
     # prepare the mask
-    _mask = np.zeros_like(contact_map.order.mask_vector(), dtype=np.bool)
+    _mask = np.zeros_like(contact_map.order.mask_vector(), dtype=bool)
     _mask[cmb_ord['index']] = True
     _mask &= contact_map.get_primary_acceptance_mask()
     logger.info('After joining with active sequence mask map: {}'.format(_mask.sum()))

@@ -50,24 +50,16 @@ def open_input(file_name):
 
 def open_output(file_name, append=False, compress=None, gzlevel=6):
     """
-    Open a text stream for reading or writing. Compression can be enabled
+    Open a text stream for writing. Compression can be enabled
     with either 'bzip2' or 'gzip'. Additional option for gzip compression
     level. Compressed filenames are only appended with suffix if not included.
-
-    :param file_name: file name of output
-    :param append: append to any existing file
-    :param compress: gzip, bzip2
-    :param gzlevel: gzip level (default 6)
-    :return:
     """
-
+    file_name = os.path.relpath(file_name)  # Convert to relative path
     mode = 'w' if not append else 'w+'
 
-    if compress == 'bzip2':
+    if compress == 'bzip2': 
         if not file_name.endswith('.bz2'):
             file_name += '.bz2'
-        # bz2 missing method to be wrapped by BufferedWriter. Just directly
-        # supply a buffer size
         return bz2.BZ2File(file_name, mode, buffering=65536)
     elif compress == 'gzip':
         if not file_name.endswith('.gz'):
@@ -77,19 +69,25 @@ def open_output(file_name, append=False, compress=None, gzlevel=6):
         return io.BufferedWriter(io.FileIO(file_name, mode))
 
 
+
 def make_dir(path, exist_ok=False):
     """
     Convenience method for making directories with a standard logic.
     An exception is raised when the specified path exists and is not a directory.
     :param path: target path to create
-    :param exist_ok: if true, an existing directory is ok. Existing files will still cause an exception
+    :param exist_ok: if true, an existing directory is ok. Existing files will still cause an exception.
     """
-    if not os.path.exists(path):
-        os.mkdir(path)
-    elif not exist_ok:
-        raise IOError('output directory already exists!')
-    elif os.path.isfile(path):
-        raise IOError('output path already exists and is a file!')
+    # Convert to relative path if needed
+    path = os.path.abspath(path)
+    if os.path.exists(path):
+        if os.path.isdir(path):
+            if not exist_ok:
+                print(f"Directory already exists: {path}")
+        else:
+            raise IOError(f'Path exists but is a file, not a directory: {path}')
+    else:
+        os.makedirs(path)
+        print(f"Created directory: {path}")
 
 
 def app_path(subdir, filename):

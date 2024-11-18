@@ -2,8 +2,17 @@ bbmapa
 ref
 output
 ref
-bin/metahit-scripts/__pycache__/
-bin/metahit-scripts/bin3C_python3/mzd/__pycache__/
+bin/metahit-scripts/__pycache__/*
+bin/metahit-scripts/bin3C_python3/mzd/__pycache__/*
 external
 .DS_Store
 comments.txt
+*.pyc
+*.pyo
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+bin/metahit-scripts/bin3C_python3/mzd/__pycache__
+__pycache__/
+*.pyc

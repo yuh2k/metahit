@@ -164,8 +164,8 @@ class SiteCounter(object):
 
 class SequenceAnalyzer:
 
-    COV_TYPE = np.dtype([('index', np.int16), ('status', np.bool), ('node', np.float),
-                         ('local', np.float), ('fold', np.float)])
+    COV_TYPE = np.dtype([('index', int), ('status', bool), ('node', float),
+                         ('local', float), ('fold', float)])
 
     @staticmethod
     def read_report(file_name):

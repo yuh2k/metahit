@@ -72,7 +72,7 @@ class Sparse2DAccumulator(object):
 
     def setitem(self, index, value):
         assert len(index) == 2 and index[0] >= 0 and index[1] >= 0, 'invalid index: {}'.format(index)
-        assert isinstance(value, (int, np.int)), 'values must be integers'
+        assert isinstance(value, (int, int)), 'values must be integers'
         self.mat[index] = value
 
     def getitem(self, index):
@@ -335,8 +335,8 @@ class ContactMatrix:
         for i in range(genomeNum_filter):
             temp_combine = list(combinations(contigs_cluster_map[i], 2))
             for j in range(len(temp_combine)):
-                x = np.int(ref[np.where(ref[:,1] == namelist_filter[temp_combine[j][0]])[0][0]][0])
-                y = np.int(ref[np.where(ref[:,1] == namelist_filter[temp_combine[j][1]])[0][0]][0])
+                x = int(ref[np.where(ref[:,1] == namelist_filter[temp_combine[j][0]])[0][0]][0])
+                y = int(ref[np.where(ref[:,1] == namelist_filter[temp_combine[j][1]])[0][0]][0])
                 self.coalign.append((x, y))
         del self.tax_info, _contig_name, _localid, ref, contigs_cluster_map, namelist_filter, taxaassignMat_filter_coalign
         logger.debug('There are {} intra-species contig pairs'.format(len(self.coalign)))

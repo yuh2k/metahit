@@ -5,6 +5,7 @@ import os
 
 def run_command(command):
     try:
+        print(f"[INFO] Executing command:\n{command}")
         subprocess.run(command, shell=True, check=True)
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] Command failed: {e}")
@@ -75,10 +76,23 @@ def raw_contact(args):
     print("[INFO] Running Raw Contact Generation")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-    command = f"./bin/metahit-modules/raw_contact.sh --bam {absolute_path(args.bam)} --fasta {absolute_path(args.fasta)} --out {output_dir}"
+    
+    # Check if enzyme argument is provided
+    if not args.enzyme:
+        print("[ERROR] Missing enzyme argument.")
+        exit(1)
+
+    command = (
+        f"./bin/metahit-modules/raw_contact1.sh --bam {absolute_path(args.bam)} "
+        f"--fasta {absolute_path(args.fasta)} --out {output_dir} --enzyme {args.enzyme}"
+    )
+    
+    # Optional coverage file
     if args.coverage:
         command += f" --coverage {absolute_path(args.coverage)}"
+    
     run_command(command)
+
 
 def normalization(args):
     print(f"[INFO] Running {args.method} Normalization")
@@ -88,20 +102,41 @@ def normalization(args):
     # Construct the normalization command
     command = f"./bin/metahit-modules/normalization.sh {args.method} --contig_file {absolute_path(args.contig_file)} --contact_matrix_file {absolute_path(args.contact_matrix_file)} --output {output_dir} --thres {args.thres}"
 
-    if args.method == "bin3c":
-        command += f" --max_iter {args.max_iter} --tol {args.tol}"
-    elif args.method == "raw":
+    if args.method == "raw":
         command += f" --min_len {args.min_len} --min_signal {args.min_signal}"
+    elif args.method == "normcc":
+        print("[INFO] Running NormCC Normalization")
+    elif args.method == "hiczin":
+        command += f" --epsilon {args.epsilon}"
+    elif args.method == "bin3c":
+        command += f" --max_iter {args.max_iter} --tol {args.tol}"
+    elif args.method == "metator":
+        command += f" --epsilon {args.epsilon}"
     elif args.method == "fastnorm":
         command += f" --epsilon {args.epsilon}"
 
-    # Add refinement method if specified
-    if args.refinement_method:
-        command += f" --refinement_method {args.refinement_method}"
-    
+    print(f"[DEBUG] Running command: {command}")
     run_command(command)
 
+def binning(args):
+    print("[INFO] Running Binning Process")
+    output_dir = absolute_path(args.output)
+    ensure_dir_exists(output_dir)
 
+    # Paths to required files
+    bam_file = absolute_path(args.bam)
+    fasta_file = absolute_path(args.fasta)
+    coverage_file = absolute_path(args.coverage) if args.coverage else None
+    enzyme_list = ' '.join(args.enzymes) if args.enzymes else 'HindIII'
+
+    # Run binning script
+    command = f"./bin/metahit-modules/binning.sh --bam {bam_file} --enzyme {enzyme_list} --fasta {fasta_file} --coverage {coverage_file} --output {output_dir}"
+    if args.num_gene:
+        command += f" --num_gene {args.num_gene}"
+    if args.seed:
+        command += f" --seed {args.seed}"
+
+    run_command(command)
 
 def main():
     parser = argparse.ArgumentParser(description="MetaHit Pipeline Command Line Interface")
@@ -153,6 +188,8 @@ def main():
     raw_parser.add_argument("--fasta", required=True, help="Path to FASTA file")
     raw_parser.add_argument("--out", dest="output", required=True, help="Output directory")
     raw_parser.add_argument("--coverage", help="Path to coverage file")
+    raw_parser.add_argument("--enzyme", required=True, help="Enzyme name used in Hi-C experiment")
+
 
     # Normalization Command
     norm_parser = subparsers.add_parser("normalization")
@@ -166,8 +203,16 @@ def main():
     norm_parser.add_argument("--max_iter", type=int, default=1000, help="Maximum iterations (bin3c normalization)")
     norm_parser.add_argument("--tol", type=float, default=1e-6, help="Tolerance (bin3c normalization)")
     norm_parser.add_argument("--epsilon", type=float, default=1, help="Epsilon value (fastnorm)")
-    norm_parser.add_argument("--refinement_method", help="Refinement method (metacc, bin3c, imputecc)")
-    
+
+    # Binning Command
+    bin_parser = subparsers.add_parser("binning")
+    bin_parser.add_argument("--bam", required=True, help="Path to BAM file")
+    bin_parser.add_argument("--fasta", required=True, help="Path to FASTA file")
+    bin_parser.add_argument("--coverage", help="Path to coverage file")
+    bin_parser.add_argument("--output", required=True, help="Output directory")
+    bin_parser.add_argument("--enzymes", nargs='+', default=['HindIII'], help="List of enzymes")
+    bin_parser.add_argument("--num_gene", type=int, help="Number of marker genes detected")
+    bin_parser.add_argument("--seed", type=int, help="Random seed")
 
     args = parser.parse_args()
 
@@ -183,6 +228,8 @@ def main():
         raw_contact(args)
     elif args.command == "normalization":
         normalization(args)
+    elif args.command == "binning":
+        binning(args)
 
 if __name__ == "__main__":
     main()

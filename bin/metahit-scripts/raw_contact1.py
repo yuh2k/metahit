@@ -15,7 +15,7 @@ import tqdm
 import os
 from MetaCC.Script.utils import count_fasta_sequences, open_input
 import logging
-
+import pandas as pd
 '''
 libraries for bin3c
 '''
@@ -79,7 +79,6 @@ class SiteCounter(object):
         Simple class to count the total number of enzymatic cut sites for the given
         list if enzymes.
         :param enzyme_names: a list of enzyme names (proper case sensitive spelling a la NEB)
-        :param tip_size: when using tip based counting, the size in bp
         :param is_linear: Treat sequence as linear.
         """
         if isinstance(enzyme_names, str):
@@ -276,15 +275,6 @@ class SeqOrder:
             _p = self._positions
         return _p
 
-    @staticmethod
-    def double_order(_ord):
-        """
-        For doublet maps, the stored order must be re-expanded to reference the larger (2x) map.
-
-        :param _ord:
-        :return: expanded order
-        """
-        return np.array([[2*oi, 2*oi+1] for oi in _ord]).ravel()
 
     def gapless_positions(self):
         """
@@ -319,21 +309,6 @@ class SeqOrder:
         self.order['mask'] = _mask
         self._update_positions()
 
-    def set_order_only(self, _ord, implicit_excl=False):
-        """
-        Convenience method to set the order using a list or 1D ndarray. Orientations will
-        be assumed as all forward (+1).
-
-        :param _ord: a list or ndarray of surrogate ids
-        :param implicit_excl: implicitly extend the order to include unmentioned excluded sequences.
-        """
-        assert isinstance(_ord, (list, np.ndarray)), 'Wrong type supplied, order must be a list or ndarray'
-        if isinstance(_ord, np.ndarray):
-            _ord = np.ravel(_ord)
-            assert np.ndim(_ord) == 1, 'orders as numpy arrays must be 1-dimensional'
-        # augment the order to include default orientations
-        _ord = SeqOrder.asindex(_ord)
-        self.set_order_and_orientation(_ord, implicit_excl=implicit_excl)
 
     def set_order_and_orientation(self, _ord, implicit_excl=False):
         """
@@ -382,13 +357,7 @@ class SeqOrder:
 
         self._update_positions()
 
-    def accepted_order(self):
-        """
-        :return: an INDEX_TYPE array of the order and orientation of the currently accepted sequences.
-        """
-        idx = np.where(self.order['mask'])
-        ori = np.ones(self.count_accepted(), dtype=int)
-        return np.array(list(zip(idx, ori)), dtype=SeqOrder.INDEX_TYPE)
+    
 
     def mask_vector(self):
         """
@@ -411,11 +380,6 @@ class SeqOrder:
         """
         return self.order['mask'].sum()
 
-    def count_excluded(self):
-        """
-        :return: the current number of excluded (masked) sequences
-        """
-        return len(self.order) - self.count_accepted()
 
     def accepted(self):
         """
@@ -423,19 +387,6 @@ class SeqOrder:
         """
         return np.where(self.order['mask'])[0]
 
-    def excluded(self):
-        """
-        :return: the list surrogate ids for currently excluded sequences
-        """
-        return np.where(~self.order['mask'])[0]
-
-    def flip(self, _id):
-        """
-        Flip the orientation of the sequence
-
-        :param _id: the surrogate id of sequence
-        """
-        self.order[_id]['ori'] *= -1
 
     def lengths(self, exclude_masked=False):
         # type: (bool) -> np.ndarray
@@ -449,43 +400,6 @@ class SeqOrder:
             return self.order['length'][self.order['mask']]
         else:
             return self.order['length']
-
-    def shuffle(self):
-        """
-        Randomize order
-        """
-        np.random.shuffle(self.order['pos'])
-        self._update_positions()
-
-    def before(self, a, b):
-        """
-        Test if a comes before another sequence in order.
-
-        :param a: surrogate id of sequence a
-        :param b: surrogate id of sequence b
-        :return: True if a comes before b
-        """
-        assert a != b, 'Surrogate ids must be different'
-        return self.order['pos'][a] < self.order['pos'][b]
-
-    def intervening(self, a, b):
-        """
-        For the current order, calculate the length of intervening
-        sequences between sequence a and sequence b.
-
-        :param a: surrogate id of sequence a
-        :param b: surrogate id of sequence b
-        :return: total length of sequences between a and b.
-        """
-        assert a != b, 'Surrogate ids must be different'
-
-        pa = self.order['pos'][a]
-        pb = self.order['pos'][b]
-        if pa > pb:
-            pa, pb = pb, pa
-        inter_ix = self._positions[pa+1:pb]
-        return np.sum(self.order['length'][inter_ix])
-
 
 
 class ContactMatrix:
@@ -537,7 +451,6 @@ class ContactMatrix:
         self.min_match_bin3c = min_match_bin3c
         self.min_signal_bin3c = min_signal_bin3c
         self.order = None
-        self.tip_size = None
         self.grouping = None 
         
         #fasta_info store the info from fasta file#
@@ -607,8 +520,10 @@ class ContactMatrix:
                 
                 try:
                     fa = self.fasta_info[rname]
+                    signal = 0
                     assert fa['length'] == rlen, 'Sequence lengths in {} do not agree: bam {} fasta {}'.format(rname, fa['length'], rlen)
-                    self.seq_info_metacc.append(SeqInfo_metacc(localid_metacc , n , rname, fa['sites'], rlen, 0))
+                    self.seq_info_metacc.append(SeqInfo_metacc(localid_metacc, n, rname, fa['sites'], rlen, 0, signal))
+
                     localid_metacc = localid_metacc + 1
                     offset_metacc += rlen
                 except KeyError:
@@ -702,7 +617,8 @@ class ContactMatrix:
         for i , idn in enumerate(contig_id):
             seq = self.seq_info_metacc[idn]
             assert seq.localid_metacc == idn, 'the local index does not match the contact matrix index for metacc'
-            seq_temp_metacc.append(SeqInfo_metacc(i , seq.refid , seq.name , seq.sites , seq.length , self.seq_map_metacc[idn , idn]))
+            seq_temp_metacc.append(SeqInfo_metacc(i, seq.refid, seq.name, seq.sites, seq.length, self.seq_map_metacc[idn, idn], signal))
+
 
         self.seq_info_metacc = seq_temp_metacc
         del seq_temp_metacc
@@ -906,18 +822,30 @@ class ContactMatrix:
             rev_idx_bin3c[fv] = n
         return rev_idx_metacc, rev_idx_bin3c
 
-    def _write_contig_info_metacc(self):
-        # Set default covcc if not available
-        for seq in self.seq_info_metacc:
-            seq = seq._replace(covcc=1.0)  # or use actual coverage data if available
 
-        contig_info_file = os.path.join(self.metacc_folder, 'tmp', 'contig_info_metacc.csv')
-        with open(contig_info_file, 'w') as out:
-            out.write('name,sites,length,covcc\n')
-            for seq in self.seq_info_metacc:
-                out.write(f"{seq.name},{seq.sites},{seq.length},{seq.covcc},{seq.signal}\n")
+    def _write_contig_info_metacc(self):
+        with open(os.path.join(self.metacc_folder, 'tmp', 'contig_info.csv'), 'w') as out:
+            out.write("name,sites,length,covcc,signal\n")
+            for i, seq in enumerate(self.seq_info_metacc):
+                signal = self.row_sum[i]
+                logging.debug(f"Writing contig: {seq.name}, Sites: {seq.sites}, Length: {seq.length}, Signal: {signal}")
+                
+                # Check if the signal is zero
+                if signal == 0:
+                    logging.warning(f"Contig {seq.name} has zero signal.")
+                    
+                out.write(f"{seq.name},{seq.sites},{seq.length},{seq.covcc},{signal}\n")
+
 
         
+        # Write the simplified contig information
+        with open(os.path.join(self.metacc_folder, 'contig_info.csv'), 'w') as out:
+            out.write("name,sites,length\n")
+            # out.write('Contig name,Number of restriction sites,Contig length\n')
+            for seq in self.seq_info_metacc:
+                out.write(f"{seq.name},{seq.sites},{seq.length}\n")
+
+            
         
     def metacc_max_offdiag(self):
         """
@@ -984,10 +912,9 @@ class ContactMatrix:
         acceptance_mask &= _mask
 
         # mask for sequences weaker than limit
-        if self.is_tipbased():
-            signal = sparse_utils.max_offdiag_4d(self.seq_map_bin3c)
-        else:
-            signal = sparse_utils.max_offdiag(self.seq_map_bin3c)
+        
+        
+        signal = sparse_utils.max_offdiag(self.seq_map_bin3c)
         _mask = signal >= min_sig
         logger.debug('Minimum signal threshold removing for bin3c: {}'.format(self.total_seq_bin3c - _mask.sum()))
         acceptance_mask &= _mask
@@ -1021,7 +948,7 @@ class ContactMatrix:
 
         # apply length normalisation if requested
         if norm:
-            _map = self._norm_seq(_map, self.is_tipbased(), mean_type=mean_type, use_sites=True)
+            _map = self._norm_seq(_map, mean_type=mean_type, use_sites=True)
             logger.debug('Map normalized')
 
         # make map bistochastic if requested
@@ -1066,22 +993,10 @@ class ContactMatrix:
 
         # remove masked sequences from the map
         if self.order.count_accepted() < self.total_seq_bin3c:
-            if self.is_tipbased():
-                _map = sparse_utils.compress_4d(_map, self.order.mask_vector())
-            else:
-                _map = sparse_utils.compress(_map.tocoo(), self.order.mask_vector())
+            
+            _map = sparse_utils.compress(_map.tocoo(), self.order.mask_vector())
             logger.info('After removing filtered sequences map dimensions: {}'.format(_map.shape))
 
-        # convert tip-based tensor to other forms
-        if self.is_tipbased():
-            if marginalise:
-                logger.debug('Marginalising NxNx2x2 tensor to NxN matrix')
-                # sum counts of the 2x2 confusion matrices into 1 value
-                _map = _map.sum(axis=(2, 3)).to_scipy_sparse()
-            elif flatten:
-                logger.debug('Flattening NxNx2x2 tensor to 2Nx2N matrix')
-                # convert the 4D map into a 2Nx2N 2D map.
-                _map = sparse_utils.flatten_tensor_4d(_map)
 
         if permute:
             _map = self._reorder_seq(_map, flatten=flatten)
@@ -1094,14 +1009,13 @@ class ContactMatrix:
         Reorder a simple sequence map using the supplied map.
 
         :param _map: the map to reorder
-        :param flatten: tip-based tensor converted to 2Nx2N matrix, otherwise the assumption is marginalisation
+        
         :return: ordered map
         """
         assert sp.isspmatrix(_map), 'reordering expects a sparse matrix type'
 
         _order = self.order.gapless_positions()
-        if self.is_tipbased() and flatten:
-            _order = SeqOrder.double_order(_order)
+        
 
         assert _map.shape[0] == _order.shape[0], 'supplied map and unmasked order are different sizes'
         p = sp.lil_matrix(_map.shape)
@@ -1120,10 +1034,8 @@ class ContactMatrix:
         """
         logger.debug('Balancing contact map')
 
-        if self.is_tipbased():
-            _map, scl = sparse_utils.kr_biostochastic_4d(_map)
-        else:
-            _map, scl = sparse_utils.kr_biostochastic(_map)
+        
+        _map, scl = sparse_utils.kr_biostochastic(_map)
         return _map, scl
 
     def _get_sites(self):
@@ -1133,13 +1045,12 @@ class ContactMatrix:
         _sites[np.where(_sites == 0)] = 1
         return _sites
 
-    def _norm_seq(self, _map, tip_based, use_sites=True, mean_type='geometric'):
+    def _norm_seq(self, _map, use_sites=True, mean_type='geometric'):
         """
         Normalise a simple sequence map in place by the geometric mean of interacting contig pairs lengths.
         The map is assumed to be in starting order.
 
         :param _map: the target map to apply normalisation
-        :param tip_based: treat the supplied map as a tip-based tensor
         :param use_sites: normalise matrix counts using observed sites, otherwise normalise
         using sequence lengths as a proxy
         :param mean_type: for length normalisation, choice of mean (harmonic, geometric, arithmetic)
@@ -1149,24 +1060,18 @@ class ContactMatrix:
             logger.debug('Doing site based normalisation')
             _sites = self._get_sites()
             _map = _map.astype(float)
-            if tip_based:
-                fast_norm_tipbased_bysite(_map.coords, _map.data, _sites)
-            else:
-                fast_norm_fullseq_bysite(_map.row, _map.col, _map.data, _sites)
+            fast_norm_fullseq_bysite(_map.row, _map.col, _map.data, _sites)
 
         else:
             logger.debug('Doing length based normalisation')
-            if tip_based:
-                _tip_lengths = np.minimum(self.tip_size, self.order.lengths()).astype(float)
-                fast_norm_tipbased_bylength(_map.coords, _map.data, _tip_lengths, self.tip_size)
-            else:
-                _mean_func = mean_selector(mean_type)
-                _len = self.order.lengths().astype(float)
-                _map = _map.tolil().astype(float)
-                for i in range(_map.shape[0]):
-                    _map[i, :] /= np.fromiter((1e-3 * _mean_func(_len[i],  _len[j])
-                                               for j in range(_map.shape[0])), dtype=float)
-                _map = _map.tocsr()
+        
+            _mean_func = mean_selector(mean_type)
+            _len = self.order.lengths().astype(float)
+            _map = _map.tolil().astype(float)
+            for i in range(_map.shape[0]):
+                _map[i, :] /= np.fromiter((1e-3 * _mean_func(_len[i],  _len[j])
+                                           for j in range(_map.shape[0])), dtype=float)
+            _map = _map.tocsr()
 
         return _map
     
@@ -1188,17 +1093,346 @@ class ContactMatrix:
         :return: True if the map has zero weight
         """
         return self.map_weight() == 0
-  
-    def is_tipbased(self):
-        """
-        :return: True if the seq_map is a tip-based 4D tensor
-        """
-        return self.tip_size is not None
+
+
 
     
     
     
+        '''
+libraries for metacc
+'''
+# from scripts.raw_contact_both import ContactMatrix
+from MetaCC.Script.normalized_contact import NormCCMap
+from MetaCC.Script.utils import load_object, save_object, make_dir, gen_bins, gen_sub_bins, make_random_seed
+from MetaCC.Script.normcc import normcc
+import scipy.sparse as scisp
+import argparse
+import warnings
+import logging
+import shutil
+import sys
+import os
+
+
+#######Import python packages
+import argparse
+import warnings
+import logging
+import shutil
+import sys
+import os
+import fileinput
+
+##Ignore the warning information of package deprecation##
+warnings.filterwarnings("ignore")
+
+__version__ = '1.0.0, released at 10/2024'
+
+def replace_in_file(file_path):
+    with fileinput.input(file_path, inplace=True) as file:
+        for line in file:
+            if ">" and ":"  in line:
+              new_line = line.split(' ')[1].split(':')[1]
+              print(">"+new_line)
+            else:
+              print(line,end="")
+
+if __name__ == '__main__':
+    
+    
+    
+    def mk_version():
+        return 'Metahit v{}'.format(__version__)
+
+    def out_name(base, suffix):
+        return '{}{}'.format(base, suffix)
+
+    def ifelse(arg, default):
+        if arg is None:
+            return default
+        else:
+            return arg
+    
+    
+    
+    script_directory = os.path.dirname(os.path.abspath(sys.argv[0]))
+
+    global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser.add_argument('-V', '--version', default=False, action='store_true', help='Show the application version')
+    global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
+    global_parser.add_argument('--cover', default=False, action='store_true', help='Cover existing files')
+    
+    
+    global_parser.add_argument('--FASTA', help='Reference fasta sequence')
+    global_parser.add_argument('--BAM', help='Input bam file in query order')
+    global_parser.add_argument('--OUTDIR', help='Output directory')
+    global_parser.add_argument('-e', '--enzyme', metavar='NEB_NAME', action='append',
+                           help='Case-sensitive enzyme name. Use multiple times for multiple enzymes')
+    
+    
+    global_parser.add_argument('--metacc-min-len', type=int,
+                           help='Minimum acceptable contig length [1000]')
+    global_parser.add_argument('--metacc-min-signal', type=int,
+                           help='Minimum acceptable Hi-C signal [2]')
+    global_parser.add_argument('--metacc-min-mapq', type=int,
+                           help='Minimum acceptable mapping quality [30]')
+    global_parser.add_argument('--metacc-min-match', type=int,
+                           help='Accepted alignments must being N matches [30]')
+    global_parser.add_argument('--thres', type=float,
+                           help='the fraction of discarded NormCC-normalized Hi-C contacts [0.05]')
+    global_parser.add_argument('--num-gene', type=int,
+                               help='Number of maker genes detected, automatically detected if not input')
+    
+    global_parser.add_argument('--seed', type=int, default=None,
+                               help='Random seed')
+    global_parser.add_argument('--metacc-min-binsize', type=int,
+                               help='Minimum bin size used in output [150000]')
+    
+    
+    
+    
+    global_parser.add_argument('--bin3c-min-len', type=int,
+                           help='Minimum acceptable contig length [1000]')
+    global_parser.add_argument('--bin3c-min-signal', type=int,
+                           help='Minimum acceptable Hi-C signal [2]')
+    global_parser.add_argument('--bin3c-min-mapq', type=int,
+                           help='Minimum acceptable mapping quality [30]')
+    global_parser.add_argument('--bin3c-min-match', type=int,
+                           help='Accepted alignments must being N matches [30]')
+    global_parser.add_argument('--bin3c-min-extent', type=int,
+                               help='Minimum cluster extent used in output [50000]')
+    
+    
+    global_parser.add_argument('--no-fasta', default=False, action='store_true',
+                             help='Do not generate cluster FASTA files')
+    
+    
+    global_parser.add_argument('--no-report', default=False, action='store_true',
+                             help='Do not generate a cluster report')
+    
+    global_parser.add_argument('--no-spades', default=False, action='store_true',
+                             help='Assembly was not done using SPAdes')
+    
+    global_parser.add_argument('--only-large', default=False, action='store_true',
+                             help='Only write FASTA for clusters longer than min_extent')
+    
+    
+    
+    
+    global_parser.add_argument('-t', '--threads', default=30, type=int, help="the number of threads. default is 30.")
+    
+    
+    
+    global_parser.add_argument('--gene-cov', type=float, help='gene coverage used in detecting marker genes, default 0.9')
+    global_parser.add_argument('--rwr-rp', type=float, help='random walk restart probability, default 0.5')
+    global_parser.add_argument('--rwr-thres', type=int, help='cut-off to maintain sparsity in each random walk step, default 80')
+    global_parser.add_argument('--max-markers', type=int, help='maximum number of contigs with marker genes, default 8000')
+    
+    global_parser.add_argument('--intra', type=int, help='percentile threshold to assign the contigs to preliminary bins in pre-clustering step, default 50')
+    global_parser.add_argument('--inter', type=int, help='percentile threshold to assign the contigs to new bins in pre-clustering step, default 0')
+    
+    global_parser.add_argument('--cont-weight', type=float, help='coefficient of completeness - cont_weight * completeness, default 2')
+    global_parser.add_argument('--min-comp', type=float, help='minimum completeness of bin to consider during bin selection process, default 50')
+    global_parser.add_argument('--max-cont' , type=float, help='maximum contamination of bin to consider during bin selection process, default 10')
+    global_parser.add_argument('--report-quality', type=float, help="minimum quality of bin to report, default 10")
+    global_parser.add_argument('--imputecc-min-binsize', type=int, help='Minimum bin size used in output [100000]')
+
+
+
+
+
+    args = global_parser.parse_args()
+
+    if args.version:
+        print(mk_version())
+        sys.exit(0)
+    
+    
+    output_dir = os.path.abspath(args.OUTDIR)
+
+    try:
+        make_dir(output_dir)
+    except IOError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    metacc_folder = os.path.join(output_dir, 'metacc')
+    bin3c_folder = os.path.join(output_dir, 'bin3c')
+    imputecc_folder = os.path.join(output_dir, 'imputecc')
+
+    # Define metacc temp folder
+    metacc_temp_folder = os.path.join(metacc_folder, 'tmp')
+
+    # Ensure the temp folder exists
+    if not os.path.exists(metacc_temp_folder):
+        os.makedirs(metacc_temp_folder, exist_ok=True)
+
+    try:
+        make_dir(metacc_folder, exist_ok=True)
+        make_dir(bin3c_folder, exist_ok=True)
+        make_dir(imputecc_folder, exist_ok=True)
+    except IOError as e:
+        print(f"Error creating output directories: {e}")
+        sys.exit(1)
+
+    
+    
+    
+
+    
+    
+    imputecc_temp_folder = os.path.join(imputecc_folder , 'tmp')
+    if not os.path.exists(imputecc_temp_folder):
+        os.mkdir(imputecc_temp_folder)
+    else:
+        shutil.rmtree(imputecc_temp_folder)           
+        os.mkdir(imputecc_temp_folder)
+    
+    
+    
+    # Create Intermediate folder
+    # Intermediate folder is not deleted
+    interm_folder = os.path.join(imputecc_folder, 'intermediate')
+    if not os.path.exists(interm_folder):
+        os.mkdir(interm_folder)
         
+    
+        
+    
+           
+    logging.captureWarnings(True)
+    logger = logging.getLogger('main')
+
+    # root log listens to everything
+    root = logging.getLogger('')
+    root.setLevel(logging.DEBUG)
+
+    # log message format
+    formatter = logging.Formatter(fmt='%(levelname)-8s | %(asctime)s | %(name)7s | %(message)s')
+
+    # Runtime console listens to INFO by default
+    ch = logging.StreamHandler()
+    if args.verbose:
+        ch.setLevel(logging.DEBUG)
+    else:
+        ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    root.addHandler(ch)
+
+    # File log listens to all levels from root
+    log_path = os.path.join(args.OUTDIR, 'bin_refinement.log')
+    fh = logging.FileHandler(log_path, mode='a')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+    root.addHandler(fh)
+
+    # Add some environmental details
+    logger.debug(mk_version())
+    logger.debug(sys.version.replace('\n', ' '))
+    logger.debug('Command line: {}'.format(' '.join(sys.argv)))
+    
+    
+    
+    
+    bin3c_runtime_defaults = {
+        'min_reflen': 1000,
+        'min_signal': 5,
+        'min_extent': 50000,
+        'min_mapq': 60,
+        'strong': 10
+    }
+    
+    metacc_runtime_defaults = {
+        'min_len': 1000,
+        'min_signal': 2,
+        'min_mapq': 30,
+        'min_match': 30,
+        'thres': 0.05,
+        'min_binsize':150000
+    }
+    
+    imputecc_runtime_defaults = {
+        'gene_cov': 0.9,
+        'rwr_rp': 0.5,
+        'rwr_thres': 80,
+        'max_markers': 8000,
+        'intra': 50,
+        'inter': 0,
+        'min_binsize':100000,
+        'cont_weight': 2,
+        'min_comp': 50.0,
+        'max_cont': 10.0,
+        'report_quality': 10.0
+    }
+    
+
+        
+    logger.info('Begin constructing raw contact matrix for metacc and bin3c...')
+    cm = ContactMatrix(
+                    args.BAM,
+                    args.enzyme,
+                    args.FASTA,
+                    args.OUTDIR,
+                    metacc_folder,
+                    bin3c_folder,
+                    # min_insert and bin_size are used by bin3C
+                    min_insert = 0,
+                    bin_size=None,
+                    
+                    #parameters for metacc
+                    min_mapq_metacc=ifelse(args.metacc_min_mapq, metacc_runtime_defaults['min_mapq']),
+                    min_len_metacc=ifelse(args.metacc_min_len, metacc_runtime_defaults['min_len']),
+                    #min_match is strong in bin3C
+                    min_match_metacc=ifelse(args.metacc_min_match, metacc_runtime_defaults['min_match']),
+                    min_signal_metacc=ifelse(args.metacc_min_signal, metacc_runtime_defaults['min_signal']),
+                    
+                    
+                    #parameters for bin3c
+                    min_mapq_bin3c=ifelse(args.bin3c_min_mapq, bin3c_runtime_defaults['min_mapq']),
+                    min_len_bin3c=ifelse(args.bin3c_min_len, bin3c_runtime_defaults['min_reflen']),
+                    #min_match is strong in bin3C
+                    min_match_bin3c=ifelse(args.bin3c_min_match, bin3c_runtime_defaults['strong']),
+                    min_signal_bin3c=ifelse(args.bin3c_min_signal, bin3c_runtime_defaults['min_signal'])
+                    )
+    
+
+    logger.info('Raw contact matrix construction finished for metacc and bin3c')
+    
+    save_object(os.path.join(metacc_folder, 'contact_map.p'), cm)
+
+    '''
+
+
+        #The following is the normalization process of MetaCC
+
+    '''
+
+    logger.info('Begin normalizing raw contacts by NormCC for metacc raw matrix')
+    
+    contig_file = os.path.join(metacc_temp_folder , 'contig_info.csv')
+    norm_result = normcc(contig_file)
+    # Load the contig information into a pandas DataFrame
+    contig_info_df = pd.read_csv(contig_file)
+
+    # Pass the DataFrame instead of the file path
+    # hzmap = NormCCMap(metacc_folder, cm.seq_info_metacc, cm.seq_map_metacc, contig_info_df, norm_result)
+
+    
+    ######Construct normalized matrix of Hi-C interaction maps#############
+    hzmap = NormCCMap(metacc_folder,
+                    contig_info_df,
+                    cm.seq_map_metacc,
+                    norm_result,
+                    thres = ifelse(args.thres, metacc_runtime_defaults['thres']))
+                    
+    logger.info('NormCC normalization finished')
+                
+
+    #shutil.rmtree(metacc_temp_folder) ######Remove all intermediate files#######
+    scisp.save_npz(os.path.join(metacc_folder, 'raw_contact_matrix_metacc.npz'), hzmap.seq_map.tocsr())
+    
+    logger.info('MetaCC Normalization results have been saved')
 
 
 

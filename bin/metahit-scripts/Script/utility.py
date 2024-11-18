@@ -275,7 +275,7 @@ def random_walk_cpu(P, rp, perc, tol, num_marker_contig):
     row = np.arange(num_marker_contig)
     col = np.arange(num_marker_contig)
     data = np.ones(num_marker_contig)
-    I = scisp.coo_matrix((data, (row, col)), shape=(num_marker_contig, P.shape[0]), dtype=np.float32)
+    I = scisp.coo_matrix((data, (row, col)), shape=(num_marker_contig, P.shape[0]), dtype=float)
     Q = I.copy()
     delta_previous = 0
     for i in range(500):

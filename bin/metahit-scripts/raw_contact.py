@@ -303,6 +303,7 @@ class ContactMatrix:
 
         # Write contig_info.csv
         with open(contig_info_file, 'w') as f:
+            f.write('name,sites,length,covcc\n')
             for seq in self.seq_info:
                 if has_coverage:
                     coverage = coverage_dict.get(seq.name, 0.0)
