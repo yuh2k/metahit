@@ -6,62 +6,82 @@ import pandas as pd
 import numpy as np
 import operator
 from ImputeCC.Script.utility import gen_bins, match_contigs
-
+import logging
 def PreCluster(marker_contig_counts, marker_contigs, contig_markers, imputed_matrix, dict_contigRevLocal, intra, inter):
-        _my_gene_counts = list(marker_contig_counts.values())
-        _my_gene_counts.sort(reverse=True)      
+    """
+    Pre-clusters contigs based on marker gene counts and normalized contact matrix.
 
-        smg_iteration = {}
-        n = 0
-        _unique_my_gene_counts = list(set(_my_gene_counts))
-        _unique_my_gene_counts.sort(reverse=True)
+    Parameters:
+        marker_contig_counts (dict): Counts of marker genes per contig.
+        marker_contigs (dict): Mapping from marker genes to contigs.
+        contig_markers (dict): Mapping from contigs to their marker genes.
+        imputed_matrix (scipy.sparse matrix): Normalized contact matrix.
+        dict_contigRevLocal (dict): Reverse mapping of contigs (local to global or vice versa).
+        intra (float): Intra-bin percentile threshold.
+        inter (float): Inter-bin percentile threshold.
 
-        # Get contigs for each iteration of single-copy marker gene
-        for _g_count in _unique_my_gene_counts:
-            # Get the single-copy marker genes with maximum count of contigs and
-            # sort them in the descending order of the total marker genes contained
+    Returns:
+        tuple: Bins dictionary and bin_of_contigs dictionary.
+    """
+    _my_gene_counts = list(marker_contig_counts.values())
+    _my_gene_counts.sort(reverse=True)
 
-            total_contig_mgs = {}
-            
-            ####item here is the single copy marker genes
-            #If multiple genes correspond to the same number of contigs, we will sort the genes according to the number of genes on contigs
-            for item in marker_contig_counts:
-                if marker_contig_counts[item] == _g_count:
-                    total_contig_lengths = 0
-                    
-                    #Marker contigs are dict gene: contigs###
-                    for contig in marker_contigs[item]:
-                        contig_mg_counts = len(contig_markers[contig])
-                        total_contig_lengths += contig_mg_counts
+    smg_iteration = {}
+    n = 0
+    _unique_my_gene_counts = sorted(list(set(_my_gene_counts)), reverse=True)
 
-                    total_contig_mgs[item] = total_contig_lengths
+    # Get contigs for each iteration of single-copy marker gene
+    for _g_count in _unique_my_gene_counts:
+        total_contig_mgs = {}
 
-            total_contig_mgs_sorted = sorted(
-                total_contig_mgs.items(), key=operator.itemgetter(1), reverse=True
-            )
+        # Items here are the single-copy marker genes
+        for item in marker_contig_counts:
+            if marker_contig_counts[item] == _g_count:
+                total_contig_lengths = 0
 
-            for item in total_contig_mgs_sorted:
-                smg_iteration[n] = marker_contigs[item[0]]
-                n += 1
-                
-        if len(imputed_matrix.tocoo().data) == 0:
-            bins = {}
-            bin_of_contig = {}
-            for i in range(len(smg_iteration[0])):
-                contig_num = smg_iteration[0][i]
-                bins[i] = [contig_num]
-                bin_of_contig[contig_num] = i
-        else:
-            bins, bin_of_contig, _, _, _ = match_contigs(
-                smg_iteration,
-                contig_markers,
-                imputed_matrix.tolil(),
-                dict_contigRevLocal,
-                np.percentile(imputed_matrix.tocoo().data , intra),
-                np.percentile(imputed_matrix.tocoo().data , inter)
-            )
-        return bins, bin_of_contig
+                # Marker contigs are dict gene: contigs
+                for contig in marker_contigs[item]:
+                    contig_mg_counts = len(contig_markers.get(contig, []))
+                    total_contig_lengths += contig_mg_counts
 
+                total_contig_mgs[item] = total_contig_lengths
+
+        # Sort genes based on the number of marker genes they contain
+        total_contig_mgs_sorted = sorted(
+            total_contig_mgs.items(), key=operator.itemgetter(1), reverse=True
+        )
+
+        for item in total_contig_mgs_sorted:
+            smg_iteration[n] = marker_contigs[item[0]]
+            n += 1
+
+    # Check if any marker genes were detected
+    if not smg_iteration:
+        logging.warning("No marker genes detected. Skipping pre-clustering.")
+        return {}, {}
+
+    # Proceed with clustering based on the presence of data in the imputed matrix
+    if len(imputed_matrix.tocoo().data) == 0:
+        bins = {}
+        bin_of_contig = {}
+        logging.info(f"Pre-clustering with {len(smg_iteration)} marker gene iterations.")
+
+        for i in range(len(smg_iteration[0])):
+            contig_num = smg_iteration[0][i]
+            bins[i] = [contig_num]
+            bin_of_contig[contig_num] = i
+    else:
+        bins, bin_of_contig, _, _, _ = match_contigs(
+            smg_iteration,
+            contig_markers,
+            imputed_matrix.tolil(),
+            dict_contigRevLocal,
+            np.percentile(imputed_matrix.tocoo().data, intra),
+            np.percentile(imputed_matrix.tocoo().data, inter)
+        )
+
+    logging.info(f"Pre-clustering finished with {len(bins)} preliminary bins established.")
+    return bins, bin_of_contig
 
 
 def Clust4CheckM(fasta_file, contig_info_file, normcc_matrix_file, path):

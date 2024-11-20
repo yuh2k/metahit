@@ -18,3 +18,25 @@ bin/metahit-modules/raw_contact1.sh --bam "output/alignment/sorted_map.bam" \
     --out "./output1" \
     --enzyme "HindIII"
 
+
+
+bin/metahit-modules/bin_refinement.sh output/assembly/final_assembly.fasta output/alignment/sorted_map.bam output/bins \                                    
+-t 10 --enzyme DpnII --metacc-min-len 1000 --metacc-min-signal 2 --bin3c-min-len 1000 \
+--bin3c-min-signal 5 --thres 0.05 --cover 
+bin/metahit-modules/bin_refinement.sh output/assembly/final_assembly.fasta output/alignment/sorted_map.bam output/bins \
+-t 10 --enzyme DpnII --metacc-min-len 1000 --metacc-min-signal 2 --bin3c-min-len 1000 \
+--bin3c-min-signal 5 --thres 0.05 --cover
+
+
+echo "[INFO] Running Bin Refinement Process..."
+./metahit.py bin_refinement --fasta "output/assembly/final_assembly.fasta" \
+  --bam "output/alignment/sorted_map.bam" \
+  --output "output/bins/refined_bins" \
+  -t 10 \
+  --enzyme DpnII \
+  --metacc-min-len 1000 \
+  --metacc-min-signal 2 \
+  --bin3c-min-len 1000 \
+  --bin3c-min-signal 1 \
+  --thres 0.01 \
+  --cover

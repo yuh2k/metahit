@@ -13,8 +13,9 @@ OUTPUT_DIR="output"
 REFINEMENT_METHOD="metacc"
 
 # Step 1: Read QC
-echo "[INFO] Running Read QC..."
+echo "[INFO] Running Read QC for SG sample..."
 ./metahit.py readqc -1 "$SG_R1" -2 "$SG_R2" -o "${OUTPUT_DIR}/readqc/sg" -t 4 --xmx 4g
+echo "[INFO] Running Read QC for Hi-C sample..."
 ./metahit.py readqc -1 "$HIC_R1" -2 "$HIC_R2" -o "${OUTPUT_DIR}/readqc/hic" -t 4 --xmx 4g
 
 # Step 2: Assembly
@@ -56,27 +57,31 @@ for method in raw normcc hiczin bin3c metator fastnorm; do
         --output "${OUTPUT_DIR}/normalization/raw" --min_len 500 --min_signal 1 --thres 1
       ;;
     normcc)
-      echo "[INFO] running normcc normalization"
+      echo "[INFO] Running NormCC Normalization"
       ./metahit.py normalization $method --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
         --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
         --output "${OUTPUT_DIR}/normalization/${method}" --thres 1
       ;;
     hiczin)
+      echo "[INFO] Running HiCzin Normalization"
       ./metahit.py normalization $method --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
         --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
         --output "${OUTPUT_DIR}/normalization/${method}" --thres 1 --epsilon 1
       ;;
     metator)
+      echo "[INFO] Running Metator Normalization"
       ./metahit.py normalization $method --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
         --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
         --output "${OUTPUT_DIR}/normalization/${method}" --thres 1 --epsilon 1
       ;;
     bin3c)
+      echo "[INFO] Running Bin3C Normalization"
       ./metahit.py normalization bin3c --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
         --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
         --output "${OUTPUT_DIR}/normalization/bin3c" --max_iter 1000 --tol 1e-6 --thres 1
       ;;
     fastnorm)
+      echo "[INFO] Running FastNorm Normalization"
       ./metahit.py normalization fastnorm --contig_file "${OUTPUT_DIR}/normalization/raw/contig_info.csv" \
         --contact_matrix_file "${OUTPUT_DIR}/normalization/raw/raw_contact_matrix_metacc.npz" \
         --output "${OUTPUT_DIR}/normalization/fastnorm" --epsilon 1 --thres 1
@@ -89,14 +94,18 @@ for method in raw normcc hiczin bin3c metator fastnorm; do
   fi
 done
 
-# Step 7: Binning
-# echo "[INFO] Running Binning Process..."
-# ./metahit.py binning --bam "${OUTPUT_DIR}/alignment/sorted_map.bam" \
-#   --fasta "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
-#   --coverage "${OUTPUT_DIR}/estimation/coverage.txt" \
-#   --output "${OUTPUT_DIR}/bins" \
-#   --enzymes HindIII \
-#   --num_gene 100 \
-#   --seed 42
+# Step 7: Bin Refinement
+echo "[INFO] Running Bin Refinement Process..."
+./metahit.py bin_refinement --fasta "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
+  --bam "${OUTPUT_DIR}/alignment/sorted_map.bam" \
+  --output "${OUTPUT_DIR}/bins/refined_bins" \
+  -t 10 \
+  --enzyme DpnII \
+  --metacc-min-len 1000 \
+  --metacc-min-signal 2 \
+  --bin3c-min-len 1000 \
+  --bin3c-min-signal 1 \
+  --thres 0.01 \
+  --cover
 
-# echo "[INFO] All steps completed successfully."
+echo "[INFO] All steps completed successfully."

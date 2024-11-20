@@ -118,25 +118,40 @@ def normalization(args):
     print(f"[DEBUG] Running command: {command}")
     run_command(command)
 
-def binning(args):
-    print("[INFO] Running Binning Process")
+def bin_refinement(args):
+    print("[INFO] Running Bin Refinement")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-
-    # Paths to required files
-    bam_file = absolute_path(args.bam)
+    
     fasta_file = absolute_path(args.fasta)
-    coverage_file = absolute_path(args.coverage) if args.coverage else None
-    enzyme_list = ' '.join(args.enzymes) if args.enzymes else 'HindIII'
-
-    # Run binning script
-    command = f"./bin/metahit-modules/binning.sh --bam {bam_file} --enzyme {enzyme_list} --fasta {fasta_file} --coverage {coverage_file} --output {output_dir}"
-    if args.num_gene:
-        command += f" --num_gene {args.num_gene}"
-    if args.seed:
-        command += f" --seed {args.seed}"
-
+    bam_file = absolute_path(args.bam)
+    
+    # Construct the bin_refinement.sh command
+    command = f"./bin/metahit-modules/bin_refinement.sh {fasta_file} {bam_file} {output_dir}"
+    
+    # Append optional arguments
+    if args.threads:
+        command += f" -t {args.threads}"
+    if args.enzyme:
+        for enzyme in args.enzyme:
+            command += f" --enzyme {enzyme}"
+    if args.metacc_min_len:
+        command += f" --metacc-min-len {args.metacc_min_len}"
+    if args.metacc_min_signal:
+        command += f" --metacc-min-signal {args.metacc_min_signal}"
+    if args.bin3c_min_len:
+        command += f" --bin3c-min-len {args.bin3c_min_len}"
+    if args.bin3c_min_signal:
+        command += f" --bin3c-min-signal {args.bin3c_min_signal}"
+    if args.thres:
+        command += f" --thres {args.thres}"
+    if args.cover:
+        command += f" --cover"
+    
+    # Execute the command
     run_command(command)
+
+
 
 def main():
     parser = argparse.ArgumentParser(description="MetaHit Pipeline Command Line Interface")
@@ -204,15 +219,22 @@ def main():
     norm_parser.add_argument("--tol", type=float, default=1e-6, help="Tolerance (bin3c normalization)")
     norm_parser.add_argument("--epsilon", type=float, default=1, help="Epsilon value (fastnorm)")
 
-    # Binning Command
-    bin_parser = subparsers.add_parser("binning")
-    bin_parser.add_argument("--bam", required=True, help="Path to BAM file")
-    bin_parser.add_argument("--fasta", required=True, help="Path to FASTA file")
-    bin_parser.add_argument("--coverage", help="Path to coverage file")
-    bin_parser.add_argument("--output", required=True, help="Output directory")
-    bin_parser.add_argument("--enzymes", nargs='+', default=['HindIII'], help="List of enzymes")
-    bin_parser.add_argument("--num_gene", type=int, help="Number of marker genes detected")
-    bin_parser.add_argument("--seed", type=int, help="Random seed")
+    # Binning Refinement Command
+    refinement_parser = subparsers.add_parser("bin_refinement", help="Perform bin refinement using bin_refinement.sh")
+    refinement_parser.add_argument("--fasta", required=True, help="Path to the reference fasta sequence")
+    refinement_parser.add_argument("--bam", required=True, help="Path to the input BAM file in query order")
+    refinement_parser.add_argument("-o", "--output", required=True, help="Output directory for refined bins")
+    refinement_parser.add_argument("-t", "--threads", type=int, default=10, help="Number of threads (default: 10)")
+    refinement_parser.add_argument("-e", "--enzyme", action='append', help="Case-sensitive enzyme name. Use multiple times for multiple enzymes")
+    refinement_parser.add_argument("--metacc-min-len", type=int, default=1000, help="Minimum acceptable contig length for metacc (default: 1000)")
+    refinement_parser.add_argument("--metacc-min-signal", type=int, default=2, help="Minimum acceptable Hi-C signal for metacc (default: 2)")
+    refinement_parser.add_argument("--bin3c-min-len", type=int, default=1000, help="Minimum acceptable contig length for bin3c (default: 1000)")
+    refinement_parser.add_argument("--bin3c-min-signal", type=int, default=1, help="Minimum acceptable Hi-C signal for bin3c (default: 1)")
+    refinement_parser.add_argument("--thres", type=float, default=0.01, help="Fraction threshold for NormCC-normalized Hi-C contacts (default: 0.01)")
+    refinement_parser.add_argument("--cover", action='store_true', help="Overwrite existing files if set")
+
+    # Link the subcommand to the function
+    refinement_parser.set_defaults(func=bin_refinement)
 
     args = parser.parse_args()
 
@@ -228,8 +250,8 @@ def main():
         raw_contact(args)
     elif args.command == "normalization":
         normalization(args)
-    elif args.command == "binning":
-        binning(args)
+    elif args.command == "bin_refinement":
+        bin_refinement(args)
 
 if __name__ == "__main__":
     main()

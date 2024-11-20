@@ -1,28 +1,40 @@
-#!/usr/bin/env python
-# coding: utf-8
-import pandas as pd
 import numpy as np
+import pandas as pd
 import logging
+import os
+from math import log, exp, sqrt
+from scipy import sparse as scisp
 
 logger = logging.getLogger(__name__)
 
 class NormCCMap:
-    def __init__(self, path, contig_info, seq_map, norm_result, thres):
-        self.path = path
-        self.seq_map_raw = seq_map
+    def __init__(self, path, contig_info_df, seq_map, norm_result, thres=0.05):
+        """
+        Initializes the NormCCMap object.
+
+        Parameters:
+        - path (str): Path to the metacc folder.
+        - contig_info_df (pd.DataFrame): DataFrame containing contig information.
+        - seq_map (scipy.sparse matrix): Raw contact matrix.
+        - norm_result (list): List of normalization coefficients.
+        - thres (float): Threshold for spurious contact detection.
+        """
+        self.contig_info = contig_info_df
         self.seq_map = seq_map
         self.norm_result = norm_result
         self.thres = thres
-        
-        # Check if contig_info is a DataFrame
-        if not isinstance(contig_info, pd.DataFrame):
-            raise ValueError("contig_info must be a pandas DataFrame")
-        
-        # Extract columns from the DataFrame
-        self.name = contig_info['name'].tolist()
-        self.site = contig_info['sites'].tolist()
-        self.len = contig_info['length'].tolist()
-        self.covcc = contig_info['covcc'].tolist()
+
+        # Log the columns present
+        logging.debug(f"Columns in contig_info_metacc.csv: {self.contig_info.columns.tolist()}")
+
+        try:
+            self.name = self.contig_info['name'].tolist()
+            self.site = self.contig_info['sites'].tolist()
+            self.len = self.contig_info['length'].tolist()
+            self.covcc = self.contig_info['covcc'].tolist()
+        except KeyError as e:
+            logging.error(f"Expected column {e} not found in contig_info_metacc.csv")
+            raise e
 
         # Convert lists to numpy arrays for efficient processing
         self.name = np.array(self.name)
@@ -34,126 +46,212 @@ class NormCCMap:
         self.norm()
 
     def norm(self):
-        self.seq_map = self.seq_map.tocoo()
-        _map_row = self.seq_map.row
-        _map_col = self.seq_map.col
-        _map_data = self.seq_map.data
-        _index = _map_row < _map_col
-        _map_row = _map_row[_index]
-        _map_col = _map_col[_index]
-        _map_data = _map_data[_index]
-        
         coeff = self.norm_result
-        self.seq_map = self.seq_map.tolil()
-        self.seq_map = self.seq_map.astype(float)
+        if coeff is None:
+            logger.error("Normalization coefficients are None.")
+            raise ValueError("Normalization coefficients are None.")
 
-        mu_vector = [np.exp(coeff[0] + coeff[1] * np.log(site) + coeff[2] * np.log(length) + coeff[3] * np.log(covcc))
-                     for site, length, covcc in zip(self.site, self.len, self.covcc)]
+        logger.debug(f"Normalization coefficients: {coeff}")
+
+        if len(coeff) == 4:
+            # Using 'sites', 'length', 'covcc'
+            mu_vector = [
+                exp(
+                    coeff[0] + 
+                    coeff[1] * log(site + 1e-9) + 
+                    coeff[2] * log(length + 1e-9) + 
+                    coeff[3] * log(covcc + 1e-9)
+                ) 
+                for site, length, covcc in zip(self.site, self.len, self.covcc)
+            ]
+            logger.debug(f"mu_vector (with 'sites'): min={np.min(mu_vector)}, max={np.max(mu_vector)}, mean={np.mean(mu_vector)}")
+        elif len(coeff) == 3:
+            # 'sites' is constant; using 'length', 'covcc'
+            mu_vector = [
+                exp(
+                    coeff[0] + 
+                    coeff[1] * log(length + 1e-9) + 
+                    coeff[2] * log(covcc + 1e-9)
+                ) 
+                for length, covcc in zip(self.len, self.covcc)
+            ]
+            logger.debug(f"mu_vector (without 'sites'): min={np.min(mu_vector)}, max={np.max(mu_vector)}, mean={np.mean(mu_vector)}")
+        else:
+            logger.error(f"Unexpected number of coefficients: {len(coeff)}")
+            raise ValueError("Normalization coefficients count mismatch.")
+
+        # Ensure seq_map is in COO format for iteration
+        seq_map_coo = self.seq_map.tocoo()
+        _map_row = seq_map_coo.row
+        _map_col = seq_map_coo.col
+        _map_data = seq_map_coo.data
+
+        # Ensure seq_map is in LIL format for efficient modifications
+        self.seq_map = self.seq_map.tolil().astype(float)
+
+        # Calculate scaling factor
         scal = np.max(mu_vector)
+        logger.debug(f"Scaling factor (scal): {scal}")
+
         _norm_contact = []
 
+        # Iterate over the non-zero elements of the matrix
         for i, j, d in zip(_map_row, _map_col, _map_data):
-            d_norm = scal * d / np.sqrt(mu_vector[i] * mu_vector[j])
-            _norm_contact.append(d_norm)
-            self.seq_map[i, j] = d_norm
-            self.seq_map[j, i] = d_norm
+            if i < j:  # Ensure each pair is processed once
+                try:
+                    d_norm = scal * d / sqrt(mu_vector[i] * mu_vector[j])
+                except IndexError:
+                    logger.error(f"IndexError for i={i}, j={j}. Check mu_vector length.")
+                    raise
+                except ZeroDivisionError:
+                    logger.error(f"ZeroDivisionError for mu_vector[i]={mu_vector[i]}, mu_vector[j]={mu_vector[j]}.")
+                    d_norm = 0
+                _norm_contact.append(d_norm)
+                self.seq_map[i, j] = d_norm
+                self.seq_map[j, i] = d_norm
 
         logger.info('Eliminating systematic biases finished')
 
         # Remove spurious contacts based on threshold
         cutoffs = np.percentile(_norm_contact, self.thres * 100)
+        logger.debug(f"Cutoff for spurious contacts (threshold={self.thres}): {cutoffs}")
+
+        excluded_contacts = 0
         for idx, val in enumerate(_norm_contact):
             if val < cutoffs:
-                self.seq_map[_map_row[idx], _map_col[idx]] = 0
-                self.seq_map[_map_col[idx], _map_row[idx]] = 0
+                i, j = _map_row[idx], _map_col[idx]
+                self.seq_map[i, j] = 0
+                self.seq_map[j, i] = 0
+                excluded_contacts += 1
 
+        logger.debug(f"Excluded {excluded_contacts} contacts below cutoff {cutoffs}")
         logger.info('Spurious contact detection finished')
 
-        
-        
-        
+        # Convert back to CSR format for efficient arithmetic operations
+        self.seq_map = self.seq_map.tocsr()
+
+        # Log final statistics
+        total_contacts = len(_norm_contact)
+        remaining_contacts = total_contacts - excluded_contacts
+        logger.debug(f"Total contacts: {total_contacts}, Remaining contacts: {remaining_contacts}")
+
+        if remaining_contacts == 0:
+            logger.warning("All contacts have been excluded after normalization and thresholding.")
+
         
 class NormCCMap_LC:
-    def __init__(self, path , contig_info , seq_map , norm_result , thres):
-        '''
-        perc: threshold of spurious contacts
-        '''
-        self.path = path
-        self.seq_map_raw = seq_map
+    def __init__(self, path, contig_info_df, seq_map, norm_result, thres=0.05):
+        """
+        Initializes the NormCCMap_LC object.
+
+        Parameters:
+        - path (str): Path to the metacc folder.
+        - contig_info_df (pd.DataFrame): DataFrame containing contig information.
+        - seq_map (scipy.sparse matrix): Raw contact matrix.
+        - norm_result (list): List of normalization coefficients.
+        - thres (float): Threshold for spurious contact detection.
+        """
+        self.contig_info = contig_info_df
         self.seq_map = seq_map
         self.norm_result = norm_result
         self.thres = thres
-        self.name = []
-        self.len = []
-        self.covcc = []
 
-        for i in range(len(contig_info)):
-            temp = contig_info[i]
-            self.name.append(temp.name)
-            self.len.append(temp.length)
-            self.covcc.append(temp.covcc)
+        # Log the columns present
+        logging.debug(f"Columns in contig_info_metacc.csv: {self.contig_info.columns.tolist()}")
 
-        del contig_info
-        
-        ####transfer the list to numpy array to do slicing#####
+        try:
+            self.name = self.contig_info['name'].tolist()
+            self.len = self.contig_info['length'].tolist()
+            self.covcc = self.contig_info['covcc'].tolist()
+        except KeyError as e:
+            logging.error(f"Expected column {e} not found in contig_info_metacc.csv")
+            raise e
+
+        # Convert lists to numpy arrays for efficient processing
         self.name = np.array(self.name)
         self.len = np.array(self.len)
         self.covcc = np.array(self.covcc)
-        
-        #####Normalize raw contacts######
+
+        # Perform normalization
         self.norm()
 
-        
-
     def norm(self):
-        self.seq_map = self.seq_map.tocoo()
-        _map_row = self.seq_map.row
-        _map_col = self.seq_map.col
-        _map_data = self.seq_map.data
-        _index = _map_row<_map_col
-        _map_row = _map_row[_index]
-        _map_col = _map_col[_index]
-        _map_data = _map_data[_index]
-        
-        _map_coor = list(zip(_map_row , _map_col , _map_data))
         coeff = self.norm_result
-        
-        self.seq_map = self.seq_map.tolil()
-        self.seq_map = self.seq_map.astype(float)
-        
-        mu_vector = []
-        for contig_feature in zip(self.len, self.covcc):
-            mu_vector.append(exp(coeff[0] + coeff[1]*log(contig_feature[0])+ coeff[2]*log(contig_feature[1])))
+        if coeff is None:
+            logger.error("Normalization coefficients are None.")
+            raise ValueError("Normalization coefficients are None.")
+
+        logger.debug(f"Normalization coefficients: {coeff}")
+
+        if len(coeff) == 3:
+            # Using 'length', 'covcc' (since 'sites' is constant)
+            mu_vector = [
+                exp(
+                    coeff[0] + 
+                    coeff[1] * log(length + 1e-9) + 
+                    coeff[2] * log(covcc + 1e-9)
+                ) 
+                for length, covcc in zip(self.len, self.covcc)
+            ]
+            logger.debug(f"mu_vector (without 'sites'): min={np.min(mu_vector)}, max={np.max(mu_vector)}, mean={np.mean(mu_vector)}")
+        else:
+            logger.error(f"Unexpected number of coefficients: {len(coeff)}")
+            raise ValueError("Normalization coefficients count mismatch.")
+
+        # Ensure seq_map is in COO format for iteration
+        seq_map_coo = self.seq_map.tocoo()
+        _map_row = seq_map_coo.row
+        _map_col = seq_map_coo.col
+        _map_data = seq_map_coo.data
+
+        # Ensure seq_map is in LIL format for efficient modifications
+        self.seq_map = self.seq_map.tolil().astype(float)
+
+        # Calculate scaling factor
         scal = np.max(mu_vector)
+        logger.debug(f"Scaling factor (scal): {scal}")
+
         _norm_contact = []
-        
-        for i in _map_coor:
-            x = i[0]
-            y = i[1]
-            d = i[2]
-            
-            d_norm = scal*d/sqrt(mu_vector[x]*mu_vector[y])
-            _norm_contact.append(d_norm)
-            
-            self.seq_map[x , y] = d_norm
-            self.seq_map[y , x] = d_norm
-            
+
+        # Iterate over the non-zero elements of the matrix
+        for i, j, d in zip(_map_row, _map_col, _map_data):
+            if i < j:  # Ensure each pair is processed once
+                try:
+                    d_norm = scal * d / sqrt(mu_vector[i] * mu_vector[j])
+                except IndexError:
+                    logger.error(f"IndexError for i={i}, j={j}. Check mu_vector length.")
+                    raise
+                except ZeroDivisionError:
+                    logger.error(f"ZeroDivisionError for mu_vector[i]={mu_vector[i]}, mu_vector[j]={mu_vector[j]}.")
+                    d_norm = 0
+                _norm_contact.append(d_norm)
+                self.seq_map[i, j] = d_norm
+                self.seq_map[j, i] = d_norm
+
         logger.info('Eliminating systematic biases finished')
-        
-        ########Remove spurious contacts###########
-        cutoffs = np.percentile(_norm_contact , self.thres*100)
-        count = 0
-        for j in range(len(_norm_contact)):
-            x = _map_row[j]
-            y = _map_col[j]
-            if _norm_contact[j] < cutoffs:
-                self.seq_map[x , y] = 0
-                self.seq_map[y , x] = 0
-                count += 1
-        logger.debug('{}% contacts have been removed with the cutoff {}'.format(round(100*count/len(_norm_contact)) , round(cutoffs,2)))
+
+        # Remove spurious contacts based on threshold
+        cutoffs = np.percentile(_norm_contact, self.thres * 100)
+        logger.debug(f"Cutoff for spurious contacts (threshold={self.thres}): {cutoffs}")
+
+        excluded_contacts = 0
+        for idx, val in enumerate(_norm_contact):
+            if val < cutoffs:
+                i, j = _map_row[idx], _map_col[idx]
+                self.seq_map[i, j] = 0
+                self.seq_map[j, i] = 0
+                excluded_contacts += 1
+
+        logger.debug(f"Excluded {excluded_contacts} contacts below cutoff {cutoffs}")
         logger.info('Spurious contact detection finished')
-        
-        del _map_row, _map_col, _map_data, _map_coor, _norm_contact, count
 
+        # Convert back to CSR format for efficient arithmetic operations
+        self.seq_map = self.seq_map.tocsr()
 
+        # Log final statistics
+        total_contacts = len(_norm_contact)
+        remaining_contacts = total_contacts - excluded_contacts
+        logger.debug(f"Total contacts: {total_contacts}, Remaining contacts: {remaining_contacts}")
 
+        if remaining_contacts == 0:
+            logger.warning("All contacts have been excluded after normalization and thresholding.")

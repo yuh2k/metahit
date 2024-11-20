@@ -16,3 +16,6 @@ __pycache__/
 bin/metahit-scripts/bin3C_python3/mzd/__pycache__
 __pycache__/
 *.pyc
+output1
+output2
+comments

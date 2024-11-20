@@ -7,7 +7,7 @@ from MetaCC.Script.predict_species_number import gen_bestk
 from MetaCC.Script.cluster import ClusterBin
 from MetaCC.Script.exceptions import ApplicationException
 from MetaCC.Script.utils import load_object, save_object, make_dir, gen_bins, gen_sub_bins, make_random_seed
-from MetaCC.Script.normcc import normcc, normcc_LC
+from MetaCC.Script.normcc import normcc
 import scipy.sparse as scisp
 import argparse
 import warnings
@@ -15,7 +15,7 @@ import logging
 import shutil
 import sys
 import os
-
+import pandas as pd
 
 '''
 libraries for bin3c
@@ -308,39 +308,27 @@ if __name__ == '__main__':
     }
     
     try:
-        
-        
         logger.info('Begin constructing raw contact matrix for metacc and bin3c...')
         cm = ContactMatrix(
-                        args.BAM,
-                        args.enzyme,
-                        args.FASTA,
-                        args.OUTDIR,
-                        metacc_folder,
-                        bin3c_folder,
-                        # min_insert and bin_size are used by bin3C
-                        min_insert = 0,
-                        bin_size=None,
-                        
-                        #parameters for metacc
-                        min_mapq_metacc=ifelse(args.metacc_min_mapq, metacc_runtime_defaults['min_mapq']),
-                        min_len_metacc=ifelse(args.metacc_min_len, metacc_runtime_defaults['min_len']),
-                        #min_match is strong in bin3C
-                        min_match_metacc=ifelse(args.metacc_min_match, metacc_runtime_defaults['min_match']),
-                        min_signal_metacc=ifelse(args.metacc_min_signal, metacc_runtime_defaults['min_signal']),
-                        
-                        
-                        #parameters for bin3c
-                        min_mapq_bin3c=ifelse(args.bin3c_min_mapq, bin3c_runtime_defaults['min_mapq']),
-                        min_len_bin3c=ifelse(args.bin3c_min_len, bin3c_runtime_defaults['min_reflen']),
-                        #min_match is strong in bin3C
-                        min_match_bin3c=ifelse(args.bin3c_min_match, bin3c_runtime_defaults['strong']),
-                        min_signal_bin3c=ifelse(args.bin3c_min_signal, bin3c_runtime_defaults['min_signal'])
-                        )
-        
+            args.BAM,
+            args.enzyme,
+            args.FASTA,
+            args.OUTDIR,
+            metacc_folder,
+            bin3c_folder,
+            min_insert=0,
+            bin_size=None,
+            min_mapq_metacc=ifelse(args.metacc_min_mapq, metacc_runtime_defaults['min_mapq']),
+            min_len_metacc=ifelse(args.metacc_min_len, metacc_runtime_defaults['min_len']),
+            min_match_metacc=ifelse(args.metacc_min_match, metacc_runtime_defaults['min_match']),
+            min_signal_metacc=ifelse(args.metacc_min_signal, metacc_runtime_defaults['min_signal']),
+            min_mapq_bin3c=ifelse(args.bin3c_min_mapq, bin3c_runtime_defaults['min_mapq']),
+            min_len_bin3c=ifelse(args.bin3c_min_len, bin3c_runtime_defaults['min_reflen']),
+            min_match_bin3c=ifelse(args.bin3c_min_match, bin3c_runtime_defaults['strong']),
+            min_signal_bin3c=ifelse(args.bin3c_min_signal, bin3c_runtime_defaults['min_signal'])
+        )
+        logger.info('Raw contact matrix construction finished for metacc and bin3c.')
 
-        logger.info('Raw contact matrix construction finished for metacc and bin3c')
-        
         save_object(os.path.join(metacc_folder, 'contact_map.p'), cm)
 
         '''
@@ -354,11 +342,11 @@ if __name__ == '__main__':
         
         contig_file = os.path.join(metacc_temp_folder , 'contig_info_metacc.csv')
         norm_result = normcc(contig_file)
-        
+        contig_info_df = pd.read_csv(contig_file)
         
         ######Construct normalized matrix of Hi-C interaction maps#############
-        hzmap = NormCCMap(metacc_folder,
-                        cm.seq_info_metacc,
+        hzmap = NormCCMap_LC(metacc_folder,
+                        contig_info_df,
                         cm.seq_map_metacc,
                         norm_result,
                         thres = ifelse(args.thres, metacc_runtime_defaults['thres']))

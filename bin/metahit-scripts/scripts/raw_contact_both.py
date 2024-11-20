@@ -68,7 +68,7 @@ def mean_selector(name):
 
 
 
-SeqInfo_metacc = namedtuple('SeqInfo_metacc', ['localid_metacc', 'refid', 'name', 'sites', 'length', 'covcc', 'signal'])
+SeqInfo_metacc = namedtuple('SeqInfo_metacc', ['localid_metacc', 'refid', 'name', 'sites', 'length', 'covcc']) #create a new class of tuple: SeqInfo
 
 SeqInfo_bin3c = namedtuple('SeqInfo_bin3c', ['offset', 'refid', 'name', 'length', 'sites'])
 
@@ -79,7 +79,6 @@ class SiteCounter(object):
         Simple class to count the total number of enzymatic cut sites for the given
         list if enzymes.
         :param enzyme_names: a list of enzyme names (proper case sensitive spelling a la NEB)
-        :param tip_size: when using tip based counting, the size in bp
         :param is_linear: Treat sequence as linear.
         """
         if isinstance(enzyme_names, str):
@@ -276,15 +275,6 @@ class SeqOrder:
             _p = self._positions
         return _p
 
-    @staticmethod
-    def double_order(_ord):
-        """
-        For doublet maps, the stored order must be re-expanded to reference the larger (2x) map.
-
-        :param _ord:
-        :return: expanded order
-        """
-        return np.array([[2*oi, 2*oi+1] for oi in _ord]).ravel()
 
     def gapless_positions(self):
         """
@@ -319,21 +309,6 @@ class SeqOrder:
         self.order['mask'] = _mask
         self._update_positions()
 
-    def set_order_only(self, _ord, implicit_excl=False):
-        """
-        Convenience method to set the order using a list or 1D ndarray. Orientations will
-        be assumed as all forward (+1).
-
-        :param _ord: a list or ndarray of surrogate ids
-        :param implicit_excl: implicitly extend the order to include unmentioned excluded sequences.
-        """
-        assert isinstance(_ord, (list, np.ndarray)), 'Wrong type supplied, order must be a list or ndarray'
-        if isinstance(_ord, np.ndarray):
-            _ord = np.ravel(_ord)
-            assert np.ndim(_ord) == 1, 'orders as numpy arrays must be 1-dimensional'
-        # augment the order to include default orientations
-        _ord = SeqOrder.asindex(_ord)
-        self.set_order_and_orientation(_ord, implicit_excl=implicit_excl)
 
     def set_order_and_orientation(self, _ord, implicit_excl=False):
         """
@@ -382,13 +357,7 @@ class SeqOrder:
 
         self._update_positions()
 
-    def accepted_order(self):
-        """
-        :return: an INDEX_TYPE array of the order and orientation of the currently accepted sequences.
-        """
-        idx = np.where(self.order['mask'])
-        ori = np.ones(self.count_accepted(), dtype=int)
-        return np.array(list(zip(idx, ori)), dtype=SeqOrder.INDEX_TYPE)
+    
 
     def mask_vector(self):
         """
@@ -411,11 +380,6 @@ class SeqOrder:
         """
         return self.order['mask'].sum()
 
-    def count_excluded(self):
-        """
-        :return: the current number of excluded (masked) sequences
-        """
-        return len(self.order) - self.count_accepted()
 
     def accepted(self):
         """
@@ -423,19 +387,6 @@ class SeqOrder:
         """
         return np.where(self.order['mask'])[0]
 
-    def excluded(self):
-        """
-        :return: the list surrogate ids for currently excluded sequences
-        """
-        return np.where(~self.order['mask'])[0]
-
-    def flip(self, _id):
-        """
-        Flip the orientation of the sequence
-
-        :param _id: the surrogate id of sequence
-        """
-        self.order[_id]['ori'] *= -1
 
     def lengths(self, exclude_masked=False):
         # type: (bool) -> np.ndarray
@@ -449,43 +400,6 @@ class SeqOrder:
             return self.order['length'][self.order['mask']]
         else:
             return self.order['length']
-
-    def shuffle(self):
-        """
-        Randomize order
-        """
-        np.random.shuffle(self.order['pos'])
-        self._update_positions()
-
-    def before(self, a, b):
-        """
-        Test if a comes before another sequence in order.
-
-        :param a: surrogate id of sequence a
-        :param b: surrogate id of sequence b
-        :return: True if a comes before b
-        """
-        assert a != b, 'Surrogate ids must be different'
-        return self.order['pos'][a] < self.order['pos'][b]
-
-    def intervening(self, a, b):
-        """
-        For the current order, calculate the length of intervening
-        sequences between sequence a and sequence b.
-
-        :param a: surrogate id of sequence a
-        :param b: surrogate id of sequence b
-        :return: total length of sequences between a and b.
-        """
-        assert a != b, 'Surrogate ids must be different'
-
-        pa = self.order['pos'][a]
-        pb = self.order['pos'][b]
-        if pa > pb:
-            pa, pb = pb, pa
-        inter_ix = self._positions[pa+1:pb]
-        return np.sum(self.order['length'][inter_ix])
-
 
 
 class ContactMatrix:
@@ -537,7 +451,6 @@ class ContactMatrix:
         self.min_match_bin3c = min_match_bin3c
         self.min_signal_bin3c = min_signal_bin3c
         self.order = None
-        self.tip_size = None
         self.grouping = None 
         
         #fasta_info store the info from fasta file#
@@ -906,17 +819,19 @@ class ContactMatrix:
             rev_idx_bin3c[fv] = n
         return rev_idx_metacc, rev_idx_bin3c
 
+
     def _write_contig_info_metacc(self):
-        # Set default covcc if not available
-        for seq in self.seq_info_metacc:
-            seq = seq._replace(covcc=1.0)  # or use actual coverage data if available
+        # Write detailed contig information
+        with open(os.path.join(self.metacc_folder, 'tmp', 'contig_info_metacc.csv'), 'w') as out_tmp:
+            out_tmp.write("name,sites,length,covcc,signal\n")
+            for i, seq in enumerate(self.seq_info_metacc):
+                out_tmp.write(f"{seq.name},{seq.sites},{seq.length},{seq.covcc},{self.row_sum[i]}\n")
 
-        contig_info_file = os.path.join(self.metacc_folder, 'tmp', 'contig_info_metacc.csv')
-        with open(contig_info_file, 'w') as out:
-            out.write('name,sites,length,covcc\n')
-            for seq in self.seq_info_metacc:
-                out.write(f"{seq.name},{seq.sites},{seq.length},{seq.covcc},{seq.signal}\n")
-
+        # with open(os.path.join(self.metacc_folder , 'contig_info_metacc.csv'),'w') as out:
+        #     out.write("name,sites,length\n")
+        #     for seq in self.seq_info_metacc:
+        #         out.write(str(seq.name)+ ',' + str(seq.sites)+ ',' + str(seq.length))
+        #         out.write('\n')
         
         
     def metacc_max_offdiag(self):
@@ -984,10 +899,9 @@ class ContactMatrix:
         acceptance_mask &= _mask
 
         # mask for sequences weaker than limit
-        if self.is_tipbased():
-            signal = sparse_utils.max_offdiag_4d(self.seq_map_bin3c)
-        else:
-            signal = sparse_utils.max_offdiag(self.seq_map_bin3c)
+        
+        
+        signal = sparse_utils.max_offdiag(self.seq_map_bin3c)
         _mask = signal >= min_sig
         logger.debug('Minimum signal threshold removing for bin3c: {}'.format(self.total_seq_bin3c - _mask.sum()))
         acceptance_mask &= _mask
@@ -1021,7 +935,7 @@ class ContactMatrix:
 
         # apply length normalisation if requested
         if norm:
-            _map = self._norm_seq(_map, self.is_tipbased(), mean_type=mean_type, use_sites=True)
+            _map = self._norm_seq(_map, mean_type=mean_type, use_sites=True)
             logger.debug('Map normalized')
 
         # make map bistochastic if requested
@@ -1066,22 +980,10 @@ class ContactMatrix:
 
         # remove masked sequences from the map
         if self.order.count_accepted() < self.total_seq_bin3c:
-            if self.is_tipbased():
-                _map = sparse_utils.compress_4d(_map, self.order.mask_vector())
-            else:
-                _map = sparse_utils.compress(_map.tocoo(), self.order.mask_vector())
+            
+            _map = sparse_utils.compress(_map.tocoo(), self.order.mask_vector())
             logger.info('After removing filtered sequences map dimensions: {}'.format(_map.shape))
 
-        # convert tip-based tensor to other forms
-        if self.is_tipbased():
-            if marginalise:
-                logger.debug('Marginalising NxNx2x2 tensor to NxN matrix')
-                # sum counts of the 2x2 confusion matrices into 1 value
-                _map = _map.sum(axis=(2, 3)).to_scipy_sparse()
-            elif flatten:
-                logger.debug('Flattening NxNx2x2 tensor to 2Nx2N matrix')
-                # convert the 4D map into a 2Nx2N 2D map.
-                _map = sparse_utils.flatten_tensor_4d(_map)
 
         if permute:
             _map = self._reorder_seq(_map, flatten=flatten)
@@ -1094,14 +996,13 @@ class ContactMatrix:
         Reorder a simple sequence map using the supplied map.
 
         :param _map: the map to reorder
-        :param flatten: tip-based tensor converted to 2Nx2N matrix, otherwise the assumption is marginalisation
+        
         :return: ordered map
         """
         assert sp.isspmatrix(_map), 'reordering expects a sparse matrix type'
 
         _order = self.order.gapless_positions()
-        if self.is_tipbased() and flatten:
-            _order = SeqOrder.double_order(_order)
+        
 
         assert _map.shape[0] == _order.shape[0], 'supplied map and unmasked order are different sizes'
         p = sp.lil_matrix(_map.shape)
@@ -1120,10 +1021,8 @@ class ContactMatrix:
         """
         logger.debug('Balancing contact map')
 
-        if self.is_tipbased():
-            _map, scl = sparse_utils.kr_biostochastic_4d(_map)
-        else:
-            _map, scl = sparse_utils.kr_biostochastic(_map)
+        
+        _map, scl = sparse_utils.kr_biostochastic(_map)
         return _map, scl
 
     def _get_sites(self):
@@ -1133,13 +1032,12 @@ class ContactMatrix:
         _sites[np.where(_sites == 0)] = 1
         return _sites
 
-    def _norm_seq(self, _map, tip_based, use_sites=True, mean_type='geometric'):
+    def _norm_seq(self, _map, use_sites=True, mean_type='geometric'):
         """
         Normalise a simple sequence map in place by the geometric mean of interacting contig pairs lengths.
         The map is assumed to be in starting order.
 
         :param _map: the target map to apply normalisation
-        :param tip_based: treat the supplied map as a tip-based tensor
         :param use_sites: normalise matrix counts using observed sites, otherwise normalise
         using sequence lengths as a proxy
         :param mean_type: for length normalisation, choice of mean (harmonic, geometric, arithmetic)
@@ -1149,24 +1047,18 @@ class ContactMatrix:
             logger.debug('Doing site based normalisation')
             _sites = self._get_sites()
             _map = _map.astype(float)
-            if tip_based:
-                fast_norm_tipbased_bysite(_map.coords, _map.data, _sites)
-            else:
-                fast_norm_fullseq_bysite(_map.row, _map.col, _map.data, _sites)
+            fast_norm_fullseq_bysite(_map.row, _map.col, _map.data, _sites)
 
         else:
             logger.debug('Doing length based normalisation')
-            if tip_based:
-                _tip_lengths = np.minimum(self.tip_size, self.order.lengths()).astype(float)
-                fast_norm_tipbased_bylength(_map.coords, _map.data, _tip_lengths, self.tip_size)
-            else:
-                _mean_func = mean_selector(mean_type)
-                _len = self.order.lengths().astype(float)
-                _map = _map.tolil().astype(float)
-                for i in range(_map.shape[0]):
-                    _map[i, :] /= np.fromiter((1e-3 * _mean_func(_len[i],  _len[j])
-                                               for j in range(_map.shape[0])), dtype=float)
-                _map = _map.tocsr()
+        
+            _mean_func = mean_selector(mean_type)
+            _len = self.order.lengths().astype(float)
+            _map = _map.tolil().astype(float)
+            for i in range(_map.shape[0]):
+                _map[i, :] /= np.fromiter((1e-3 * _mean_func(_len[i],  _len[j])
+                                           for j in range(_map.shape[0])), dtype=float)
+            _map = _map.tocsr()
 
         return _map
     
@@ -1188,12 +1080,8 @@ class ContactMatrix:
         :return: True if the map has zero weight
         """
         return self.map_weight() == 0
-  
-    def is_tipbased(self):
-        """
-        :return: True if the seq_map is a tip-based 4D tensor
-        """
-        return self.tip_size is not None
+
+
 
     
     
