@@ -827,11 +827,11 @@ class ContactMatrix:
             for i, seq in enumerate(self.seq_info_metacc):
                 out_tmp.write(f"{seq.name},{seq.sites},{seq.length},{seq.covcc},{self.row_sum[i]}\n")
 
-        # with open(os.path.join(self.metacc_folder , 'contig_info_metacc.csv'),'w') as out:
-        #     out.write("name,sites,length\n")
-        #     for seq in self.seq_info_metacc:
-        #         out.write(str(seq.name)+ ',' + str(seq.sites)+ ',' + str(seq.length))
-        #         out.write('\n')
+        with open(os.path.join(self.metacc_folder , 'contig_info_metacc.csv'),'w') as out:
+            out.write("name,sites,length\n")
+            for seq in self.seq_info_metacc:
+                out.write(str(seq.name)+ ',' + str(seq.sites)+ ',' + str(seq.length))
+                out.write('\n')
         
         
     def metacc_max_offdiag(self):

@@ -31,7 +31,7 @@ bin/metahit-modules/bin_refinement.sh output/assembly/final_assembly.fasta outpu
 echo "[INFO] Running Bin Refinement Process..."
 ./metahit.py bin_refinement --fasta "output/assembly/final_assembly.fasta" \
   --bam "output/alignment/sorted_map.bam" \
-  --output "output/bins/refined_bins" \
+  --output "output/bins" \
   -t 10 \
   --enzyme DpnII \
   --metacc-min-len 1000 \
