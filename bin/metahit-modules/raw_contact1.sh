@@ -40,7 +40,7 @@ fi
 # Create output directory if it doesn't exist
 mkdir -p "$OUTDIR"
 
-# Activate Conda environment
+# Activate Conda environment Todo: delete
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate metahit_env
 
