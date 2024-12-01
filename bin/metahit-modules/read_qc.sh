@@ -96,11 +96,11 @@ fi
 # Run BBDuk Steps with .gz output
 echo "Running Adapter trimming with BBDuk"
 external/bbmap/bbduk.sh -Xmx$xmx in1="$reads_1" in2="$reads_2" out1="${out}/step1_adptrim_1.fastq.gz" out2="${out}/step1_adptrim_2.fastq.gz" \
-    ref="$ref" ktrim=r k=23 mink=11 hdist=1 minlen="$minlen" threads="$threads" gzip=true
+    ref="$ref" ktrim=r k=23 mink=11 hdist=1 minlen="$minlen" threads="$threads" gzip=true #####Todo parametrized all parameters
 
 echo "Running Quality trimming with BBDuk"
 external/bbmap/bbduk.sh -Xmx$xmx in1="${out}/step1_adptrim_1.fastq.gz" in2="${out}/step1_adptrim_2.fastq.gz" \
-    out1="${out}/step2_qualtrim_1.fastq.gz" out2="${out}/step2_qualtrim_2.fastq.gz" qtrim=r trimq="$trimq" ftm="$ftm" \
+    out1="${out}/step2_qualtrim_1.fastq.gz" out2="${out}/step2_qualtrim_2.fastq.gz" qtrim=r trimq="$trimq" ftm="$ftm" \ #####Todo parametrized all parameters
     minlen="$minlen" threads="$threads" gzip=true
 
 echo "Trimming left bases with BBDuk"
