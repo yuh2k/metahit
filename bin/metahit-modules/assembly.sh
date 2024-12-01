@@ -7,8 +7,8 @@ help_message () {
     echo "    -1 STR          Forward fastq reads"
     echo "    -2 STR          Reverse fastq reads"
     echo "    -o STR          Output directory"
-    echo "    -m INT          Memory in GB (default=24)"
-    echo "    -t INT          Number of threads (default=1)"
+    echo "    -m INT          Memory in GB (default=24)" ####Todo available 80% available memory
+    echo "    -t INT          Number of threads (default=1)" ####Todo 20
     echo "    -l INT          Minimum length of assembled contigs (default=1000)"
     echo ""
     echo "    --megahit       Assemble with MEGAHIT (default)"
@@ -155,7 +155,7 @@ if [ "$megahit_assemble" = true ]; then
     echo "ASSEMBLING WITH MEGAHIT"
     echo "Using k-mer sizes from $k_min to $k_max with step size $k_step"
     megahit -1 "$reads_1" -2 "$reads_2" -o "${out}/megahit" --min-contig-len "$min_len" --k-min "$k_min" --k-max "$k_max" --k-step "$k_step" --merge-level 20,0.95 -t "$threads" -m "${mem}000000000"
-    if [ ! -f "${out}/megahit/final.contigs.fa" ]; then echo "Error: MEGAHIT assembly failed."; exit 1; fi
+    if [ ! -f "${out}/megahit/final.contigs.fa" ]; then echo "Error: MEGAHIT assembly failed."; exit 1; fi ## Todo: merge level 
 fi
 
 # Process the assembly output
@@ -166,5 +166,5 @@ fi
 if [[ ! -s "${out}/final_assembly.fasta" ]]; then echo "Error: Final assembly failed."; exit 1; fi
 
 echo "RUNNING ASSEMBLY QC WITH QUAST"
-quast.py -t "$threads" -o "${out}/QUAST_out" -m 500 "${out}/final_assembly.fasta"
-cp "${out}/QUAST
+quast.py -t "$threads" -o "${out}/QUAST_out" -m 500 "${out}/final_assembly.fasta" ## Todo -m 500
+cp "${out}/QUAST ## Todo Check this command
