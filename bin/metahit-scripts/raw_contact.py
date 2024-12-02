@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import os
+import logging
 from collections import OrderedDict, namedtuple
 from collections.abc import Iterable
 from Bio.Restriction import Restriction
@@ -9,9 +11,17 @@ import numpy as np
 import pysam
 import scipy.sparse as scisp
 import tqdm
-import os
 from raw_utils import count_fasta_sequences, open_input
-import logging
+import argparse
+
+# Configure logger to output debug information
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Package logger
+logger = logging.getLogger(__name__)
+
+SeqInfo = namedtuple('SeqInfo', ['localid', 'refid', 'name', 'sites', 'length', 'covcc'])  # create a new class of tuple: SeqInfo
+
 class SiteCounter(object):
     def __init__(self, enzyme_names, is_linear=True):
         """
@@ -77,7 +87,7 @@ class Sparse2DAccumulator(object):
 
 
 class ContactMatrix:
-    def __init__(self, bam_file, enzymes, seq_file, path, min_mapq=30, min_len=1000, min_match=30, min_signal=2):
+    def __init__(self, bam_file, enzymes, seq_file, path, min_mapq=30, min_len=1000, min_match=30, min_signal=2, coverage_file=None):
         # bam_file: alignment info of Hi-C library on contigs in bam
         # enzymes: name of restriction enzymes used in Hi-C experiments
         # seq_file: store the assembly contigs in fasta
@@ -89,14 +99,20 @@ class ContactMatrix:
         self.enzymes = enzymes
         self.seq_file = seq_file
         self.path = path
-        self.min_mapq = min_mapq
+        self.min_mapq_user = min_mapq
         self.min_len = min_len
-        self.min_match = min_match
+        self.min_match_user = min_match
         self.min_signal = min_signal
         self.fasta_info = {}
         self.seq_info = []
-        self.seq_map = None
         self.total_reads = None
+        self.coverage_file = coverage_file
+
+        # Parameters for metacc and bin3C
+        self.min_mapq_metacc = 30
+        self.min_match_metacc = 30
+        self.min_mapq_bin3c = 60
+        self.min_match_bin3c = 10
 
         # Ensure output directories exist
         os.makedirs(os.path.join(self.path, 'tmp'), exist_ok=True)
@@ -108,7 +124,7 @@ class ContactMatrix:
             # Get an estimate of sequences for progress
             fasta_count = count_fasta_sequences(seq_file)
             for seqrec in tqdm.tqdm(SeqIO.parse(multi_fasta, 'fasta'), total=fasta_count, desc='Analyzing contigs in reference fasta'):
-                if len(seqrec) < min_len:
+                if len(seqrec) < self.min_len:
                     continue
                 self.fasta_info[seqrec.id] = {'sites': site_counter.count_sites(seqrec.seq),
                                               'length': len(seqrec)}
@@ -126,7 +142,7 @@ class ContactMatrix:
             localid = 0
 
             for n, (rname, rlen) in enumerate(zip(bam.references, bam.lengths)):
-                if rlen < min_len:
+                if rlen < self.min_len:
                     ref_count['too_short'] += 1
                     continue
 
@@ -161,51 +177,27 @@ class ContactMatrix:
             logger.info('Handling the alignments...')
             self._bin_map(bam)
 
-        logger.info('Filtering contigs according to minimal signal({})...'.format(self.min_signal))
-        contig_id = self.max_offdiag()
-        logger.debug('{} contigs remain'.format(len(contig_id)))
-
-        self.seq_map = self.seq_map.tolil()
-        seq_temp = []  # Temporarily store the sequence information
-        for i, idn in enumerate(contig_id):
-            seq = self.seq_info[idn]
-            assert seq.localid == idn, 'The local index does not match the contact matrix index'
-            seq_temp.append(SeqInfo(i, seq.refid, seq.name, seq.sites, seq.length, self.seq_map[idn, idn]))
-
-        self.seq_info = seq_temp
-        del seq_temp
-
-        self.seq_map = self.seq_map.tocsr()
-        self.seq_map = self.seq_map[contig_id, :]
-        self.seq_map = self.seq_map.tocsc()
-        self.seq_map = self.seq_map[:, contig_id]
-        self.seq_map = self.seq_map.tocoo()
-        del contig_id
-
-        assert self.seq_map.shape[0] == len(self.seq_info), 'Filter error'
-
-        # Change the diagonal entries of Hi-C matrix to zero
-        self.seq_map = self.seq_map.tolil()
-        self.seq_map.setdiag(0)
-
-        # Compute the Hi-C signals for each contig
-        self.seq_map = self.seq_map.tocsr()
-        self.row_sum = np.matrix.tolist(self.seq_map.sum(axis=0))[0]
-        self._write_contig_info()
+        # Write contig_info.csv
+        self.write_contig_info()
+        self.save_contact_matrices()
 
     def _bin_map(self, bam):
         import tqdm
 
-        def _simple_match(r):
-            return r.mapping_quality >= self.min_mapq
+        def _matcher_user(r):
+            if self.min_match_user > 0:
+                return r.mapping_quality >= self.min_mapq_user and r.cigarstring is not None and r.cigartuples[0][0] == 0 and r.cigartuples[0][1] >= self.min_match_user
+            else:
+                return r.mapping_quality >= self.min_mapq_user
 
-        def _strong_match(r):
-            if r.mapping_quality < self.min_mapq or r.cigarstring is None:
-                return False
-            cig = r.cigartuples[-1] if r.is_reverse else r.cigartuples[0]
-            return cig[0] == 0 and cig[1] >= self.min_match
+        def _matcher_metacc(r):
+            if self.min_match_metacc > 0:
+                return r.mapping_quality >= self.min_mapq_metacc and r.cigarstring is not None and r.cigartuples[0][0] == 0 and r.cigartuples[0][1] >= self.min_match_metacc
+            else:
+                return r.mapping_quality >= self.min_mapq_metacc
 
-        _matcher = _strong_match if self.min_match else _simple_match
+        def _matcher_bin3c(r):
+            return True  # Accept all alignments
 
         def next_informative(_bam_iter, _pbar):
             while True:
@@ -214,14 +206,14 @@ class ContactMatrix:
                 if not r.is_unmapped and not r.is_secondary and not r.is_supplementary:
                     return r
 
-        _seq_map = Sparse2DAccumulator(self.total_seq)
+        _seq_map_user = Sparse2DAccumulator(self.total_seq)
+        _seq_map_metacc = Sparse2DAccumulator(self.total_seq)
+        _seq_map_bin3c = Sparse2DAccumulator(self.total_seq)
 
         with tqdm.tqdm(total=self.total_reads) as pbar:
-            _mapq = self.min_mapq
             _idx = self.make_reverse_index('refid')
             bam.reset()
             bam_iter = bam.fetch(until_eof=True)
-            self.index1 = 0
 
             counts = OrderedDict({
                 'accepted map_different_contig pairs': 0,
@@ -232,7 +224,6 @@ class ContactMatrix:
             })
 
             while True:
-                self.index1 += 1
                 try:
                     r1 = next_informative(bam_iter, pbar)
                     while True:
@@ -248,15 +239,6 @@ class ContactMatrix:
                     counts['ref_excluded pairs'] += 1
                     continue
 
-                if not _matcher(r1) or not _matcher(r2):
-                    counts['poor_match pairs'] += 1
-                    continue
-
-                if r1.reference_id == r2.reference_id:
-                    counts['accepted map_same_contig pairs'] += 1
-                else:
-                    counts['accepted map_different_contig pairs'] += 1
-
                 ix1 = _idx[r1.reference_id]
                 ix2 = _idx[r2.reference_id]
 
@@ -264,15 +246,33 @@ class ContactMatrix:
                     ix1, ix2 = ix2, ix1
 
                 ix = (ix1, ix2)
-                if _seq_map.getitem(ix):
-                    _seq_map.setitem(ix, _seq_map.getitem(ix) + 1)
-                else:
-                    _seq_map.setitem(ix, 1)
 
-        self.seq_map = _seq_map.get_coo()
-        del _seq_map, r1, r2, _idx
+                # User-determined
+                if _matcher_user(r1) and _matcher_user(r2):
+                    if _seq_map_user.getitem(ix):
+                        _seq_map_user.setitem(ix, _seq_map_user.getitem(ix) + 1)
+                    else:
+                        _seq_map_user.setitem(ix, 1)
 
-        logger.debug('Pair accounting: {}'.format(counts))
+                # MetaCC
+                if _matcher_metacc(r1) and _matcher_metacc(r2):
+                    if _seq_map_metacc.getitem(ix):
+                        _seq_map_metacc.setitem(ix, _seq_map_metacc.getitem(ix) + 1)
+                    else:
+                        _seq_map_metacc.setitem(ix, 1)
+
+                # Bin3C
+                if _matcher_bin3c(r1) and _matcher_bin3c(r2):
+                    if _seq_map_bin3c.getitem(ix):
+                        _seq_map_bin3c.setitem(ix, _seq_map_bin3c.getitem(ix) + 1)
+                    else:
+                        _seq_map_bin3c.setitem(ix, 1)
+
+            self.seq_map_user = _seq_map_user.get_coo()
+            self.seq_map_metacc = _seq_map_metacc.get_coo()
+            self.seq_map_bin3c = _seq_map_bin3c.get_coo()
+
+            logger.debug('Pair accounting: {}'.format(counts))
 
     def make_reverse_index(self, field_name):
         rev_idx = {}
@@ -283,43 +283,77 @@ class ContactMatrix:
             rev_idx[fv] = n
         return rev_idx
 
-    def _write_contig_info(self):
-        print("Writing")
-        tmp_contig_file = os.path.join(self.path, 'tmp', 'contig_info.csv')
-        final_contig_file = os.path.join(self.path, 'contig_info.csv')
+    def write_contig_info(self):
+        contig_info_file = os.path.join(self.path, 'contig_info.csv')
+        coverage_dict = {}
 
-        logger.info(f"Writing contig info to {tmp_contig_file} and {final_contig_file}")
+        if self.coverage_file and os.path.exists(self.coverage_file):
+            logger.info(f'Coverage file found at {self.coverage_file}. Including coverage information in contig_info.csv.')
+            with open(self.coverage_file, 'r') as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if len(parts) != 2:
+                        continue
+                    contig_name, coverage = parts
+                    coverage_dict[contig_name] = float(coverage)
+            has_coverage = True
+        else:
+            logger.info('Coverage file not provided or not found. Skipping coverage information in contig_info.csv.')
+            has_coverage = False
 
-        with open(tmp_contig_file, 'w') as out:
-            for i, seq in enumerate(self.seq_info):
-                out.write(f"{seq.name},{seq.sites},{seq.length},{seq.covcc},{self.row_sum[i]}\n")
-
-        with open(final_contig_file, 'w') as out:
-            out.write('Contig name,Number of restriction sites,Contig length\n')
+        # Write contig_info.csv
+        with open(contig_info_file, 'w') as f:
+            f.write('name,sites,length,covcc\n')
             for seq in self.seq_info:
-                out.write(f"{seq.name},{seq.sites},{seq.length}\n")
+                if has_coverage:
+                    coverage = coverage_dict.get(seq.name, 0.0)
+                    f.write(f'{seq.name},{seq.sites},{seq.length},{coverage}\n')
+                else:
+                    f.write(f'{seq.name},{seq.sites},{seq.length}\n')
 
-    def max_offdiag(self):
-        _m = self.seq_map
-        assert scisp.isspmatrix(_m), 'Input matrix is not a scipy.sparse object'
-        _m = _m.tolil(True)
-        _diag = _m.tocsr().diagonal()
-        _m.setdiag(0)
-        _sig = np.asarray(_m.tocsr().max(axis=0).todense()).ravel()
-        _contig_id = [i for i in range(_m.shape[0]) if _sig[i] >= self.min_signal and _diag[i] > 0 and self.seq_info[i].sites > 0]
-        del _m
-        return _contig_id
+        logger.info(f'contig_info.csv saved to {contig_info_file}')
 
 
-# Configure logger to output debug information
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# package logger
-logger = logging.getLogger(__name__)
+    def save_contact_matrices(self):
+        # Save the contact matrices as .npz files
+        from scipy.sparse import save_npz
 
-# offset is the enumeration of the length
-# localid is the index of the list
-# refid is the index of the fasta file, which is a global index
-SeqInfo = namedtuple('SeqInfo', ['localid', 'refid', 'name', 'sites', 'length', 'covcc'])  # create a new class of tuple: SeqInfo
+        matrices = {
+            'user': self.seq_map_user,
+            'metacc': self.seq_map_metacc,
+            'bin3c': self.seq_map_bin3c
+        }
+
+        for key, matrix in matrices.items():
+            matrix_file = os.path.join(self.path, f'contact_matrix_{key}.npz')
+            save_npz(matrix_file, matrix)
+            logger.info(f'Contact matrix "{key}" saved to {matrix_file}')
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate raw contact matrix and contig info.")
+    parser.add_argument('--bam', required=True, help='Path to the BAM file containing Hi-C reads')
+    parser.add_argument('--fasta', required=True, help='Path to the FASTA file containing contig sequences')
+    parser.add_argument('--out', required=True, help='Output directory to save the contact matrix and contig info')
+    parser.add_argument('--enzymes', nargs='+', required=False, default=['HindIII'], help='List of enzymes')
+    parser.add_argument('--min_mapq', type=int, default=30, help='Minimum MAPQ for user-determined method')
+    parser.add_argument('--min_len', type=int, default=1000, help='Minimum contig length')
+    parser.add_argument('--min_match', type=int, default=30, help='Minimum match length for user-determined method')
+    parser.add_argument('--coverage', required=False, help='Path to the coverage.txt file')
+    args = parser.parse_args()
+
+    # Create ContactMatrix instance and process data
+    cm = ContactMatrix(
+        bam_file=args.bam,
+        enzymes=args.enzymes,
+        seq_file=args.fasta,
+        path=args.out,
+        min_mapq=args.min_mapq,
+        min_len=args.min_len,
+        min_match=args.min_match,
+        coverage_file=args.coverage
+    )
 
 
+if __name__ == "__main__":
+    main()

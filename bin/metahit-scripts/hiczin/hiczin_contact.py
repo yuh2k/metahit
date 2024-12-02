@@ -54,7 +54,7 @@ class HiCzinMap:
         coeff = self.norm_result[0:4]
 
         self.seq_map = self.seq_map.tolil()
-        self.seq_map = self.seq_map.astype(np.float64)  # 确保使用浮点类型
+        self.seq_map = self.seq_map.astype(float)  # 确保使用浮点类型
         for x, y, d in _map_coor:
 
             s1 = self.site[x]
