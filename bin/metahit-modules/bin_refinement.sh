@@ -22,13 +22,14 @@ fi
 FASTA=$1
 BAM=$2
 OUTDIR=$3
-shift 3
+path=$4
+shift 4
 
 module load anaconda3 &&
 conda activate metahit_env
 
 # Path to the bin refinement Python script
-BIN_REFINEMENT_SCRIPT="/work/ndx163/test_software/metahit/bin/metahit-scripts/bin_refinement.py"
+BIN_REFINEMENT_SCRIPT="${path}/bin/metahit-scripts/bin_refinement.py"
 
 # Create output directory if it does not exist
 if [ ! -d "$OUTDIR" ]; then

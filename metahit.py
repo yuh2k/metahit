@@ -130,7 +130,7 @@ def bin_refinement(args):
     bam_file = absolute_path(args.bam)
     
     # Construct the bin_refinement.sh command
-    command = script_dir+f"/bin/metahit-modules/bin_refinement.sh {fasta_file} {bam_file} {output_dir}"
+    command = script_dir+f"/bin/metahit-modules/bin_refinement.sh {fasta_file} {bam_file} {output_dir} {script_dir}"
     
     # Append optional arguments
     if args.threads:
