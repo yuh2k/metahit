@@ -6,7 +6,7 @@ set -x
 
 # Default values for options
 SAMTOOLS_FILTER="-F 0x904"
-THREADS=4
+THREADS=20
 # add BWA and samtools memory parameters if available
 # Help message
 usage() {
@@ -18,8 +18,8 @@ usage() {
     echo "  -1, --reads1        Path to the first reads file (default: output/readqc/hic/final_reads_1.fastq)"
     echo "  -2, --reads2        Path to the second reads file (default: output/readqc/hic/final_reads_2.fastq)"
     echo "  -o, --output        Output directory (default: output/alignment)"
-    echo "  -t, --threads       Number of threads to use (default: 4)" ##Todo 20
-    echo "  --samtools-filter   samtools view filter options (default: '-F 0x904')" ###Todo -F is prefix 
+    echo "  -t, --threads       Number of threads to use (default: 20)"
+    echo "  --samtools-filter   samtools view filter options (default: '0x904')" 
     echo "  -h, --help          Display this help message"
     echo ""
     echo "Example:"

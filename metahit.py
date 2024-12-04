@@ -31,11 +31,31 @@ def readqc(args):
     ensure_dir_exists(output_dir)
     r1_path = find_fastq(args.r1)
     r2_path = find_fastq(args.r2)
+
     command = f"./bin/metahit-modules/read_qc.sh -1 {r1_path} -2 {r2_path} -o {output_dir} -t {args.threads}"
+    if args.minlen:
+        command += f" --minlen {args.minlen}"
+    if args.trimq:
+        command += f" --trimq {args.trimq}"
+    if args.ftl:
+        command += f" --ftl {args.ftl}"
     if args.xmx:
         command += f" --xmx {args.xmx}"
     if args.ftm:
         command += f" --ftm {args.ftm}"
+    if args.k:
+        command += f" --k {args.k}"
+    if args.mink:
+        command += f" --mink {args.mink}"
+    if args.hdist:
+        command += f" --hdist {args.hdist}"
+    if args.dedup:
+        command += " --dedup"
+    if args.skip_pre_qc:
+        command += " --skip-pre-qc-report"
+    if args.skip_post_qc:
+        command += " --skip-post-qc-report"
+
     run_command(command)
 
 def assembly(args):
@@ -44,12 +64,15 @@ def assembly(args):
     ensure_dir_exists(output_dir)
     r1_path = find_fastq(args.r1)
     r2_path = find_fastq(args.r2)
+
     command = f"./bin/metahit-modules/assembly.sh -1 {r1_path} -2 {r2_path} -o {output_dir} -m {args.memory} -t {args.threads}"
+    if args.min_len:
+        command += f" -l {args.min_len}"
     if args.megahit:
-        command += f" --megahit --k-min {args.k_min} --k-max {args.k_max} --k-step {args.k_step}"
+        command += f" --megahit --k-min {args.k_min} --k-max {args.k_max} --k-step {args.k_step} --merge-level {args.merge_level}"
     elif args.metaspades:
         command += f" --metaspades --k-list {args.k_list}"
-    command += f" -l {args.min_len}"
+
     run_command(command)
 
 def alignment(args):
@@ -165,6 +188,15 @@ def main():
     qc_parser.add_argument("-t", "--threads", type=int, default=4, help="Number of threads")
     qc_parser.add_argument("--xmx", help="Memory for Java in BBDuk (default is 60% of system memory)")
     qc_parser.add_argument("--ftm", type=int, help="ftm value for BBDuk (default=5)")
+    qc_parser.add_argument("--minlen", type=int, default=50, help="Minimum read length after trimming (default=50)")
+    qc_parser.add_argument("--trimq", type=int, default=10, help="Quality threshold for trimming (default=10)")
+    qc_parser.add_argument("--ftl", type=int, default=10, help="Trim bases from the left (default=10)")
+    qc_parser.add_argument("--dedup", action="store_true", help="Perform deduplication with Clumpify (default=False)")
+    qc_parser.add_argument("--skip-pre-qc", action="store_true", help="Skip FastQC for input reads")
+    qc_parser.add_argument("--skip-post-qc", action="store_true", help="Skip FastQC for final reads")
+    qc_parser.add_argument("--k", type=int, help="k-mer size for adapter trimming (default=23)")
+    qc_parser.add_argument("--mink", type=int, help="Minimum k-mer size (default=11)")
+    qc_parser.add_argument("--hdist", type=int, help="Hamming distance for k-mer matching (default=1)")
 
     # Assembly
     asm_parser = subparsers.add_parser("assembly")
@@ -180,6 +212,8 @@ def main():
     asm_parser.add_argument("--k-step", type=int, default=12, help="k-mer step size")
     asm_parser.add_argument("--k-list", default="21,33,55,77", help="List of k-mers for metaSPAdes")
     asm_parser.add_argument("-l", "--min-len", type=int, default=1000, help="Minimum contig length")
+    asm_parser.add_argument("--merge-level", default="20,0.95", help="Merge level for MEGAHIT (default='20,0.95')")
+
 
     # Alignment
     aln_parser = subparsers.add_parser("alignment")

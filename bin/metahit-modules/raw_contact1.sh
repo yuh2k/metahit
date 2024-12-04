@@ -40,9 +40,6 @@ fi
 # Create output directory if it doesn't exist
 mkdir -p "$OUTDIR"
 
-# Activate Conda environment Todo: delete
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate metahit_env
 
 # Run the Python script to generate raw contact matrices with the provided parameters
 python bin/metahit-scripts/raw_contact1.py \

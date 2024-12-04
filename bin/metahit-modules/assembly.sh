@@ -7,8 +7,8 @@ help_message () {
     echo "    -1 STR          Forward fastq reads"
     echo "    -2 STR          Reverse fastq reads"
     echo "    -o STR          Output directory"
-    echo "    -m INT          Memory in GB (default=24)" ####Todo available 80% available memory
-    echo "    -t INT          Number of threads (default=1)" ####Todo 20
+    echo "    -m INT          Memory in GB (default=80% of memory available)" 
+    echo "    -t INT          Number of threads (default=20)" 
     echo "    -l INT          Minimum length of assembled contigs (default=1000)"
     echo ""
     echo "    --megahit       Assemble with MEGAHIT (default)"
@@ -24,12 +24,18 @@ help_message () {
 SOFT="bin/metahit-scripts"
 
 # Default parameters
-mem=24
-threads=1
+# mem=24
+# Calculate default xmx as 0% of available memory
+available_mem_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+default_xmx=$((available_mem_kb * 80 / 100 / 1024))g
+mem=$default_xmx
+threads=20
 out="false"
 reads_1="false"
 reads_2="false"
 min_len=1000
+merge_level="20,0.95"
+
 
 metaspades_assemble=false
 megahit_assemble=true
@@ -43,7 +49,7 @@ k_step=12
 k_list="21,33,55,61"
 
 # Load in parameters
-OPTS=$(getopt -o ht:m:o:1:2:l: --long help,megahit,k-min:,k-max:,k-step:,metaspades,k-list: -- "$@")
+OPTS=$(getopt -o ht:m:o:1:2:l: --long help,megahit,k-min:,k-max:,k-step:,metaspades,k-list:,merge-level: -- "$@")
 if [ $? != 0 ]; then help_message; exit 1; fi
 
 eval set -- "$OPTS"
@@ -63,6 +69,7 @@ while true; do
         --k-max) k_max=$2; shift 2;;
         --k-step) k_step=$2; shift 2;;
         --k-list) k_list=$2; shift 2;;
+        --merge-level) merge_level=$2; shift 2;;
         --) shift; break ;;
         *) echo "Unknown option: $1"; help_message; exit 1;;
     esac
@@ -154,8 +161,8 @@ fi
 if [ "$megahit_assemble" = true ]; then
     echo "ASSEMBLING WITH MEGAHIT"
     echo "Using k-mer sizes from $k_min to $k_max with step size $k_step"
-    megahit -1 "$reads_1" -2 "$reads_2" -o "${out}/megahit" --min-contig-len "$min_len" --k-min "$k_min" --k-max "$k_max" --k-step "$k_step" --merge-level 20,0.95 -t "$threads" -m "${mem}000000000"
-    if [ ! -f "${out}/megahit/final.contigs.fa" ]; then echo "Error: MEGAHIT assembly failed."; exit 1; fi ## Todo: merge level 
+    megahit -1 "$reads_1" -2 "$reads_2" -o "${out}/megahit" --min-contig-len "$min_len" --k-min "$k_min" --k-max "$k_max" --k-step "$k_step" --merge-level "$merge_level" -t "$threads" -m "${mem}000000000"
+    if [ ! -f "${out}/megahit/final.contigs.fa" ]; then echo "Error: MEGAHIT assembly failed."; exit 1; fi 
 fi
 
 # Process the assembly output
@@ -163,8 +170,11 @@ if [ "$metaspades_assemble" = true ]; then
     ${SOFT}/rm_short_contigs.py "$min_len" "${out}/metaspades/scaffolds.fasta" > "${out}/final_assembly.fasta"
 fi
 
+if [ "$megahit_assemble" = true ]; then
+    cat "${out}/megahit/final.contigs.fa" > "${out}/final_assembly.fasta"
+fi
+
 if [[ ! -s "${out}/final_assembly.fasta" ]]; then echo "Error: Final assembly failed."; exit 1; fi
 
 echo "RUNNING ASSEMBLY QC WITH QUAST"
-quast.py -t "$threads" -o "${out}/QUAST_out" -m 500 "${out}/final_assembly.fasta" ## Todo -m 500
-cp "${out}/QUAST ## Todo Check this command
+quast.py -t "$threads" -o "${out}/QUAST_out" "${out}/final_assembly.fasta" 
