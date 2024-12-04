@@ -3,3 +3,10 @@ ref
 output
 ref
 bin/metahit-scripts/__pycache__/
+output
+output1
+output2
+__pycache__
+*.pyc
+.DS_Store
+external
