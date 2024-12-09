@@ -4,6 +4,7 @@ help_message () {
     echo ""
     echo "Usage: metahit assembly [options] -1 reads_1.fastq -2 reads_2.fastq -o output_dir"
     echo "Options:"
+    echo "    -p metahit path"
     echo "    -1 STR          Forward fastq reads"
     echo "    -2 STR          Reverse fastq reads"
     echo "    -o STR          Output directory"
@@ -21,7 +22,7 @@ help_message () {
     echo ""
 }
 
-SOFT="bin/metahit-scripts"
+SOFT="./${path}/bin/metahit-scripts"
 
 # Default parameters
 # mem=24
@@ -49,13 +50,15 @@ k_step=12
 k_list="21,33,55,61"
 
 # Load in parameters
-OPTS=$(getopt -o ht:m:o:1:2:l: --long help,megahit,k-min:,k-max:,k-step:,metaspades,k-list:,merge-level: -- "$@")
+OPTS=$(getopt -o hp:t:m:o:1:2:l:k: --long help,megahit,k-min:,k-max:,k-step:,spades,merge-level: -- "$@")
+
 if [ $? != 0 ]; then help_message; exit 1; fi
 
 eval set -- "$OPTS"
 
 while true; do
     case "$1" in
+        -p) path=$2; shift 2;; 
         -t) threads=$2; shift 2;;
         -m) mem=$2; shift 2;;
         -o) out=$2; shift 2;;

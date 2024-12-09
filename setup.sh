@@ -2,7 +2,7 @@
 
 # setup.sh
 # This script sets up the necessary dependencies for the MetaHit pipeline.
-# It downloads BWA (from GitHub, builds it), Samtools, FastQC, and BBTools
+# It downloads BWA (from GitHub, builds it), Samtools, and BBTools
 # into the "external" directory within the repository.
 
 # Exit immediately if a command exits with a non-zero status
@@ -103,35 +103,6 @@ function install_samtools() {
     fi
 }
 
-# Function to download and install FastQC
-function install_fastqc() {
-    FASTQC_VERSION="0.11.9"
-    FASTQC_ZIP="fastqc_v${FASTQC_VERSION}.zip"
-    FASTQC_URL="https://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v${FASTQC_VERSION}.zip"
-
-    if [ ! -f "${EXTERNAL_DIR}/${FASTQC_ZIP}" ]; then
-        echo_info "Downloading FastQC ${FASTQC_VERSION}..."
-        wget -O "${EXTERNAL_DIR}/${FASTQC_ZIP}" "${FASTQC_URL}"
-    else
-        echo_info "FastQC zip file already exists, skipping download."
-    fi
-
-    if [ ! -f "${BIN_DIR}/fastqc" ]; then
-        echo_info "Extracting FastQC..."
-        unzip "${EXTERNAL_DIR}/${FASTQC_ZIP}" -d "${EXTERNAL_DIR}"
-        mv "${EXTERNAL_DIR}/FastQC" "${EXTERNAL_DIR}/fastqc"
-        chmod +x "${EXTERNAL_DIR}/fastqc/fastqc"
-
-        echo_info "Creating a symbolic link to FastQC binary in 'external/bin'..."
-        ln -sf "${EXTERNAL_DIR}/fastqc/fastqc" "${BIN_DIR}/fastqc"
-
-        # Clean up
-        rm "${EXTERNAL_DIR}/${FASTQC_ZIP}"
-        echo_info "FastQC installed successfully."
-    else
-        echo_info "FastQC binary already exists in 'external/bin', skipping extraction."
-    fi
-}
 
 function install_bbtools() {
     BBTOOLS_VERSION="39.10"  # Latest version as per user request
@@ -165,7 +136,6 @@ function install_bbtools() {
 # Install all dependencies
 install_bwa
 install_samtools
-install_fastqc
 install_bbtools 
 # Verify installations
 echo_info "Verifying installations..."
@@ -184,18 +154,11 @@ else
     echo_info "Samtools installed successfully."
 fi
 
-if [ ! -f "${BIN_DIR}/fastqc" ]; then
-    echo_error "FastQC binary not found in external/bin."
-    exit 1
-else
-    echo_info "FastQC installed successfully."
-fi
 
 # Ensure all external binaries have execute permissions
 echo_info "Ensuring all external binaries have execute permissions."
 chmod +x "${BIN_DIR}/bwa"
 chmod +x "${BIN_DIR}/samtools"
-chmod +x "${BIN_DIR}/fastqc"
 chmod +x "${BIN_DIR}"/*
 
 # Optionally, add external/bin to PATH

@@ -18,6 +18,7 @@ METACC_MIN_MATCH=30
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
+        -p) path=$2; shift 2;;
         --bam) BAM="$2"; shift 2;;
         --fasta) FASTA="$2"; shift 2;;
         --out) OUTDIR="$2"; shift 2;;
@@ -42,7 +43,7 @@ mkdir -p "$OUTDIR"
 
 
 # Run the Python script to generate raw contact matrices with the provided parameters
-python bin/metahit-scripts/raw_contact1.py \
+python ${path}/bin/metahit-scripts/raw_contact1.py \
     --BAM "$BAM" \
     --FASTA "$FASTA" \
     --OUTDIR "$OUTDIR" \

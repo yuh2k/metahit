@@ -345,7 +345,7 @@ if __name__ == '__main__':
         contig_info_df = pd.read_csv(contig_file)
         
         ######Construct normalized matrix of Hi-C interaction maps#############
-        hzmap = NormCCMap_LC(metacc_folder,
+        hzmap = NormCCMap(metacc_folder,
                         contig_info_df,
                         cm.seq_map_metacc,
                         norm_result,

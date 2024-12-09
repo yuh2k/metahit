@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Display usage if not enough arguments
 if [ "$#" -lt 1 ]; then
+    echo " -p metahit path"
     echo "Usage: $0 <command> [options]"
     echo "Available commands:"
     echo "  raw            Perform raw normalization"
@@ -16,12 +16,31 @@ if [ "$#" -lt 1 ]; then
 fi
 
 COMMAND=$1
-shift 1
+shift
+
+# Parse additional options for this script
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -p) 
+            path=$2
+            shift 2
+            ;;
+        *)
+            # Stop parsing here and pass the rest to python
+            break
+            ;;
+    esac
+done
 
 # Path to the normalization.py script
-NORMALIZATION_SCRIPT="./bin/metahit-scripts/normalization.py"
+NORMALIZATION_SCRIPT="${path}/bin/metahit-scripts/normalization.py"
 
-# Execute the corresponding Python command
+if [ ! -f "$NORMALIZATION_SCRIPT" ]; then
+    echo "Error: normalization.py not found at $NORMALIZATION_SCRIPT"
+    exit 1
+fi
+
+# Pass all remaining arguments directly to python
 python "$NORMALIZATION_SCRIPT" "$COMMAND" "$@"
 
 if [ $? -ne 0 ]; then

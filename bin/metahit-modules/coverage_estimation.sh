@@ -26,8 +26,9 @@ default_memory=$(( $(free -m | awk '/^Mem:/{print $2}') * 80 / 100 ))
 JAVA_HEAP="-Xmx${default_memory}m"
 
 # Read in the arguments
-while getopts "1:2:r:o:m:" opt; do
+while getopts "p:1:2:r:o:m:" opt; do
     case $opt in
+        p) path=$OPTARG ;;
         1) reads_1=$OPTARG ;;
         2) reads_2=$OPTARG ;;
         r) ref=$OPTARG ;;
@@ -47,7 +48,7 @@ fi
 
 # Run BBMap with memory setting and capture output for debugging
 echo_info "Running BBMap..."
-./external/bbmap/bbmap.sh in1="$reads_1" in2="$reads_2" ref="$ref" out="$output_dir/SG_map.sam" bamscript="$output_dir/bs.sh" $JAVA_HEAP > "$output_dir/bbmap.log" 2>&1
+${path}/external/bbmap/bbmap.sh in1="$reads_1" in2="$reads_2" ref="$ref" out="$output_dir/SG_map.sam" bamscript="$output_dir/bs.sh" $JAVA_HEAP > "$output_dir/bbmap.log" 2>&1
 
 # Check if BBMap generated the SAM file successfully
 if [[ ! -f "$output_dir/SG_map.sam" ]]; then
@@ -57,7 +58,7 @@ fi
 
 # Run jgi_summarize_bam_contig_depths and log output
 echo_info "Running jgi_summarize_bam_contig_depths..."
-bin/metahit-scripts/jgi_summarize_bam_contig_depths \
+${path}/bin/metahit-scripts/jgi_summarize_bam_contig_depths \
     --outputDepth "$output_dir/coverage.txt" \
     --pairedContigs pair.txt \
     "$output_dir/SG_map.sam" > "$output_dir/jgi_summarize.log" 2>&1

@@ -183,8 +183,21 @@ class NormCCMap_LC:
 
         logger.debug(f"Normalization coefficients: {coeff}")
 
-        if len(coeff) == 3:
-            # Using 'length', 'covcc' (since 'sites' is constant)
+
+        if len(coeff) == 4:
+            # Using 'sites', 'length', 'covcc'
+            mu_vector = [
+                exp(
+                    coeff[0] + 
+                    coeff[1] * log(site + 1e-9) + 
+                    coeff[2] * log(length + 1e-9) + 
+                    coeff[3] * log(covcc + 1e-9)
+                ) 
+                for site, length, covcc in zip(self.site, self.len, self.covcc)
+            ]
+            logger.debug(f"mu_vector (with 'sites'): min={np.min(mu_vector)}, max={np.max(mu_vector)}, mean={np.mean(mu_vector)}")
+        elif len(coeff) == 3:
+            # 'sites' is constant; using 'length', 'covcc'
             mu_vector = [
                 exp(
                     coeff[0] + 

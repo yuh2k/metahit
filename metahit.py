@@ -2,6 +2,9 @@
 import argparse
 import subprocess
 import os
+import sys
+
+script_dir=sys.path[0]
 
 def run_command(command):
     try:
@@ -31,31 +34,11 @@ def readqc(args):
     ensure_dir_exists(output_dir)
     r1_path = find_fastq(args.r1)
     r2_path = find_fastq(args.r2)
-
-    command = f"./bin/metahit-modules/read_qc.sh -1 {r1_path} -2 {r2_path} -o {output_dir} -t {args.threads}"
-    if args.minlen:
-        command += f" --minlen {args.minlen}"
-    if args.trimq:
-        command += f" --trimq {args.trimq}"
-    if args.ftl:
-        command += f" --ftl {args.ftl}"
+    command = script_dir+f"/bin/metahit-modules/read_qc.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -o {output_dir} -t {args.threads}"
     if args.xmx:
         command += f" --xmx {args.xmx}"
     if args.ftm:
         command += f" --ftm {args.ftm}"
-    if args.k:
-        command += f" --k {args.k}"
-    if args.mink:
-        command += f" --mink {args.mink}"
-    if args.hdist:
-        command += f" --hdist {args.hdist}"
-    if args.dedup:
-        command += " --dedup"
-    if args.skip_pre_qc:
-        command += " --skip-pre-qc-report"
-    if args.skip_post_qc:
-        command += " --skip-post-qc-report"
-
     run_command(command)
 
 def assembly(args):
@@ -64,8 +47,7 @@ def assembly(args):
     ensure_dir_exists(output_dir)
     r1_path = find_fastq(args.r1)
     r2_path = find_fastq(args.r2)
-
-    command = f"./bin/metahit-modules/assembly.sh -1 {r1_path} -2 {r2_path} -o {output_dir} -m {args.memory} -t {args.threads}"
+    command = script_dir+f"/bin/metahit-modules/assembly.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -o {output_dir} -m {args.memory} -t {args.threads}"
     if args.min_len:
         command += f" -l {args.min_len}"
     if args.megahit:
@@ -81,7 +63,7 @@ def alignment(args):
     ensure_dir_exists(output_dir)
     r1_path = find_fastq(args.r1)
     r2_path = find_fastq(args.r2)
-    command = f"./bin/metahit-modules/alignment.sh -r {absolute_path(args.ref)} -1 {r1_path} -2 {r2_path} -o {output_dir} --threads {args.threads}"
+    command = script_dir+f"/bin/metahit-modules/alignment.sh -p {script_dir} -r {absolute_path(args.ref)} -1 {r1_path} -2 {r2_path} -o {output_dir} --threads {args.threads}"
     if args.samtools_filter:
         command += f" --samtools-filter '{args.samtools_filter}'"
     run_command(command)
@@ -92,7 +74,7 @@ def coverage_estimation(args):
     ensure_dir_exists(output_dir)
     r1_path = find_fastq(args.r1)
     r2_path = find_fastq(args.r2)
-    command = f"./bin/metahit-modules/coverage_estimation.sh -1 {r1_path} -2 {r2_path} -r {absolute_path(args.ref)} -o {output_dir}"
+    command = script_dir+f"/bin/metahit-modules/coverage_estimation.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -r {absolute_path(args.ref)} -o {output_dir}"
     run_command(command)
 
 def raw_contact(args):
@@ -106,7 +88,7 @@ def raw_contact(args):
         exit(1)
 
     command = (
-        f"./bin/metahit-modules/raw_contact1.sh --bam {absolute_path(args.bam)} "
+        script_dir+f"/bin/metahit-modules/raw_contact1.sh -p {script_dir} --bam {absolute_path(args.bam)} "
         f"--fasta {absolute_path(args.fasta)} --out {output_dir} --enzyme {args.enzyme}"
     )
     
@@ -123,7 +105,7 @@ def normalization(args):
     ensure_dir_exists(output_dir)
 
     # Construct the normalization command
-    command = f"./bin/metahit-modules/normalization.sh {args.method} --contig_file {absolute_path(args.contig_file)} --contact_matrix_file {absolute_path(args.contact_matrix_file)} --output {output_dir} --thres {args.thres}"
+    command = f'"{script_dir}/bin/metahit-modules/normalization.sh" {args.method} -p "{script_dir}" --contig_file "{absolute_path(args.contig_file)}" --contact_matrix_file "{absolute_path(args.contact_matrix_file)}" --output "{output_dir}" --thres {args.thres}'
 
     if args.method == "raw":
         command += f" --min_len {args.min_len} --min_signal {args.min_signal}"
@@ -150,7 +132,7 @@ def bin_refinement(args):
     bam_file = absolute_path(args.bam)
     
     # Construct the bin_refinement.sh command
-    command = f"./bin/metahit-modules/bin_refinement.sh {fasta_file} {bam_file} {output_dir}"
+    command = script_dir+f"/bin/metahit-modules/bin_refinement.sh {fasta_file} {bam_file} {output_dir} {script_dir}"
     
     # Append optional arguments
     if args.threads:

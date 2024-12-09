@@ -10,6 +10,7 @@ THREADS=20
 # add BWA and samtools memory parameters if available
 # Help message
 usage() {
+    echo "   -p metahit path"
     echo ""
     echo "Usage: $0 [options]"
     echo ""
@@ -32,6 +33,7 @@ POSITIONAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -p) path=$2; shift 2;;
         -r|--reference)
             REFERENCE="$2"
             shift 2
@@ -83,8 +85,8 @@ READS_2=${READS_2:-"output/readqc/hic/final_reads_2.fastq"}
 OUTPUT_DIR=${OUTPUT_DIR:-"output/alignment"}
 
 # Define tool paths
-BWA_PATH="./external/bin/bwa"
-SAMTOOLS_PATH="./external/bin/samtools"
+BWA_PATH="${path}/external/bin/bwa"
+SAMTOOLS_PATH="${path}/external/bin/samtools"
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"

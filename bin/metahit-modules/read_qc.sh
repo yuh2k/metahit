@@ -10,6 +10,7 @@ help_message () {
     echo ""
     echo "Usage: read_qc.sh [options] -1 reads_1.fastq -2 reads_2.fastq -o output_dir"
     echo "Options:"
+    echo "    -p metahit path"
     echo "    -1 STR          forward fastq reads (.fastq or .fastq.gz)"
     echo "    -2 STR          reverse fastq reads (.fastq or .fastq.gz)"
     echo "    -o STR          output directory"
@@ -36,7 +37,7 @@ post_qc_report=true
 out=""
 reads_1=""
 reads_2=""
-ref="external/bbmap/resources/adapters.fa"
+# ref="${path}/external/bbmap/resources/adapters.fa"
 ftm=5
 k=23 
 mink=11 
@@ -48,13 +49,15 @@ default_xmx=$((available_mem_kb * 80 / 100 / 1024))g
 xmx=$default_xmx
 
 # Getopts
-OPTS=$(getopt -o ht:o:1:2: --long help,skip-pre-qc-report,skip-post-qc-report,dedup,minlen:,trimq:,ftl:,xmx:,ftm:,ktrim:,k:,mink:,hdist:,   -- "$@")
+
+OPTS=$(getopt -o ht:o:1:2:p: --long help,skip-pre-qc-report,skip-post-qc-report,dedup,minlen:,trimq:,ftl:,xmx:,ftm:,ktrim:,k:,mink:,hdist:,   -- "$@")
 if [ $? -ne 0 ]; then help_message; exit 1; fi
 eval set -- "$OPTS"
 
 # Parse options
 while true; do
     case "$1" in
+        -p) path=$2; shift 2;;
         -t) threads=$2; shift 2;;
         -o) out=$2; shift 2;;
         -1) reads_1=$2; shift 2;;
@@ -75,7 +78,7 @@ while true; do
         *) echo "Invalid option: $1"; help_message; exit 1;;
     esac
 done
-
+ref="${path}/external/bbmap/resources/adapters.fa"
 # Check if all required parameters are entered
 if [ -z "$out" ] || [ -z "$reads_1" ] || [ -z "$reads_2" ]; then
     help_message; exit 1
@@ -101,16 +104,16 @@ fi
 
 # Run BBDuk Steps with .gz output
 echo "Running Adapter trimming with BBDuk"
-external/bbmap/bbduk.sh -Xmx$xmx in1="$reads_1" in2="$reads_2" out1="${out}/step1_adptrim_1.fastq.gz" out2="${out}/step1_adptrim_2.fastq.gz" \
+${path}/external/bbmap/bbduk.sh -Xmx$xmx in1="$reads_1" in2="$reads_2" out1="${out}/step1_adptrim_1.fastq.gz" out2="${out}/step1_adptrim_2.fastq.gz" \
     ref="$ref" ktrim=r  k="$k" mink="$mink" hdist="$hdist" minlen="$minlen" threads="$threads"
 
 echo "Running Quality trimming with BBDuk"
-external/bbmap/bbduk.sh -Xmx$xmx in1="${out}/step1_adptrim_1.fastq.gz" in2="${out}/step1_adptrim_2.fastq.gz" \
+${path}/external/bbmap/bbduk.sh -Xmx$xmx in1="${out}/step1_adptrim_1.fastq.gz" in2="${out}/step1_adptrim_2.fastq.gz" \
     out1="${out}/step2_qualtrim_1.fastq.gz" out2="${out}/step2_qualtrim_2.fastq.gz" qtrim=r trimq="$trimq" ftm="$ftm" \
     minlen="$minlen" threads="$threads"
 
 echo "Trimming left bases with BBDuk"
-external/bbmap/bbduk.sh -Xmx$xmx in1="${out}/step2_qualtrim_1.fastq.gz" in2="${out}/step2_qualtrim_2.fastq.gz" \
+${path}/external/bbmap/bbduk.sh -Xmx$xmx in1="${out}/step2_qualtrim_1.fastq.gz" in2="${out}/step2_qualtrim_2.fastq.gz" \
     out1="${out}/step3_lefttrim_1.fastq.gz" out2="${out}/step3_lefttrim_2.fastq.gz" ftl="$ftl" threads="$threads"
 
 # Deduplication step
