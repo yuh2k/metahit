@@ -30,7 +30,7 @@ help_message () {
 	echo "	--show-config	show where the metawrap configuration files are stored"
         echo "";}
 
-config_file="${bindir}/config-metawrap"
+config_file="./bin/metahit-scripts/metaWRAP/bin/config-metawrap"
 
 source $config_file
 if [[ $? -ne 0 ]]; then 
@@ -38,7 +38,7 @@ if [[ $? -ne 0 ]]; then
 	exit 1
 fi
 
-comm () { $bindir/metawrap-scripts/print_comment.py "$1" "-"; }
+comm () { ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/print_comment.py "$1" "-"; }
 
 ########################################################################################################
 ########################     LOADING IN THE PARAMETERS AND RUNNING MODULE       ########################

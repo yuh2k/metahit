@@ -157,6 +157,35 @@ def bin_refinement(args):
     run_command(command)
 
 
+def scaffolding(args):
+    print("[INFO] Running Scaffolding")
+    output_dir = os.path.abspath(args.outdir)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    command = (
+        f'"{script_dir}/bin/metahit-modules/scaffolding.sh" '
+        f'-p "{script_dir}" '
+        f'--fasta "{args.fasta}" --bam "{args.bam}" --enzyme "{args.enzyme}" '
+        f'--hic1 "{args.hic1}" --hic2 "{args.hic2}" --outdir "{output_dir}" '
+        f'-t {args.threads} -m {args.memory} -r {args.resolution}'
+    )
+    run_command(command)
+
+
+def reassembly(args):
+    print("[INFO] Running Reassembly")
+    output_dir = os.path.abspath(args.outdir)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    command = (
+        f'"{script_dir}/bin/metahit-modules/reassembly.sh" '
+        f'-p "{script_dir}" '
+        f'--bin "{args.bin}" --hic1 "{args.hic1}" --hic2 "{args.hic2}" '
+        f'--sg1 "{args.sg1}" --sg2 "{args.sg2}" --bam "{args.bam}" '
+        f'--outdir "{output_dir}" -t {args.threads} -m {args.memory}'
+    )
+    run_command(command)
+
 
 def main():
     parser = argparse.ArgumentParser(description="MetaHit Pipeline Command Line Interface")
@@ -249,6 +278,31 @@ def main():
     refinement_parser.add_argument("--thres", type=float, default=0.01, help="Fraction threshold for NormCC-normalized Hi-C contacts (default: 0.01)")
     refinement_parser.add_argument("--cover", action='store_true', help="Overwrite existing files if set")
 
+    # scaffolding子命令
+    scaff_parser = subparsers.add_parser("scaffolding", help="Perform scaffolding")
+    scaff_parser.add_argument("--fasta", required=True, help="Reference FASTA")
+    scaff_parser.add_argument("--bam", required=True, help="Hi-C BAM file")
+    scaff_parser.add_argument("--enzyme", required=True, help="Restriction enzyme")
+    scaff_parser.add_argument("--hic1", required=True, help="Hi-C library forward fastq")
+    scaff_parser.add_argument("--hic2", required=True, help="Hi-C library reverse fastq")
+    scaff_parser.add_argument("-o", "--outdir", required=True, help="Output directory")
+    scaff_parser.add_argument("-t", "--threads", type=int, default=4, help="Number of threads")
+    scaff_parser.add_argument("-m", "--memory", type=int, default=24, help="Memory in GB")
+    scaff_parser.add_argument("-r", "--resolution", type=int, default=10000, help="Resolution (default 10kb)")
+
+    # reassembly子命令
+    reasm_parser = subparsers.add_parser("reassembly", help="Perform reassembly")
+    reasm_parser.add_argument("--bin", required=True, help="Binning result directory")
+    reasm_parser.add_argument("--hic1", required=True, help="Hi-C library forward fastq")
+    reasm_parser.add_argument("--hic2", required=True, help="Hi-C library reverse fastq")
+    reasm_parser.add_argument("--sg1", required=True, help="Shotgun forward fastq")
+    reasm_parser.add_argument("--sg2", required=True, help="Shotgun reverse fastq")
+    reasm_parser.add_argument("--bam", required=True, help="Hi-C BAM mapped to shotgun assembly")
+    reasm_parser.add_argument("--outdir", required=True, help="Output directory")
+    reasm_parser.add_argument("-p", "--metahit_path", required=False, help="Path to metahit folder", default=script_dir)
+    reasm_parser.add_argument("-t", "--threads", type=int, default=4, help="Number of threads")
+    reasm_parser.add_argument("-m", "--memory", type=int, default=24, help="Memory in GB")
+
     # Link the subcommand to the function
     refinement_parser.set_defaults(func=bin_refinement)
 
@@ -268,6 +322,11 @@ def main():
         normalization(args)
     elif args.command == "bin_refinement":
         bin_refinement(args)
+    elif args.command == "scaffolding":
+        scaffolding(args)
+    elif args.command == "reassembly":
+        reassembly(args)
+
 
 if __name__ == "__main__":
     main()

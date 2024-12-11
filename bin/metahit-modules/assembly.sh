@@ -179,5 +179,7 @@ fi
 
 if [[ ! -s "${out}/final_assembly.fasta" ]]; then echo "Error: Final assembly failed."; exit 1; fi
 
+
 echo "RUNNING ASSEMBLY QC WITH QUAST"
 quast.py -t "$threads" -o "${out}/QUAST_out" "${out}/final_assembly.fasta" 
+samtools faidx "${out}/final_assembly.fasta"
