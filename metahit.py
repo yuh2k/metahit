@@ -187,6 +187,52 @@ def reassembly(args):
     run_command(command)
 
 
+def viralcc(args):
+    print("[INFO] Running ViralCC pipeline")
+    output_dir = os.path.abspath(args.OUTDIR)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    command = (
+        f'"{script_dir}/bin/metahit-modules/viral_binning.sh" pipeline '
+        f'-p "{script_dir}" '
+    )
+    if args.min_len:
+        command += f"--min-len {args.min_len} "
+    if args.min_mapq:
+        command += f"--min-mapq {args.min_mapq} "
+    if args.min_match:
+        command += f"--min-match {args.min_match} "
+    if args.min_k:
+        command += f"--min-k {args.min_k} "
+    if args.random_seed:
+        command += f"--random-seed {args.random_seed} "
+
+    # 必选参数：FASTA, BAM, VIRAL, OUTDIR
+    command += f'"{args.FASTA}" "{args.BAM}" "{args.VIRAL}" "{output_dir}"'
+
+    run_command(command)
+
+
+def annotation(args):
+    print("[INFO] Running Annotation via GTDB-Tk classify_wf")
+    output_dir = os.path.abspath(args.outdir)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    command = (
+        f'"{script_dir}/bin/metahit-modules/annotation.sh" '
+        f'-p "{script_dir}" '
+        f'--genome_dir "{args.genome_dir}" '
+        f'--out_dir "{output_dir}" '
+    )
+    if args.extension:
+        command += f'--extension {args.extension} '
+    if args.cpus:
+        command += f'--cpus {args.cpus} '
+
+    run_command(command)
+
+
+
 def main():
     parser = argparse.ArgumentParser(description="MetaHit Pipeline Command Line Interface")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -303,6 +349,28 @@ def main():
     reasm_parser.add_argument("-t", "--threads", type=int, default=4, help="Number of threads")
     reasm_parser.add_argument("-m", "--memory", type=int, default=24, help="Memory in GB")
 
+    # ViralCC
+    viralcc_parser = subparsers.add_parser("viralcc", help="Run ViralCC pipeline")
+    viralcc_parser.add_argument("viralcc_subcommand", choices=["pipeline"], help="ViralCC command")
+    viralcc_parser.add_argument("--min-len", type=int, help="Minimum acceptable reference length")
+    viralcc_parser.add_argument("--min-mapq", type=int, help="Minimum acceptable mapping quality")
+    viralcc_parser.add_argument("--min-match", type=int, help="Minimum acceptable matches")
+    viralcc_parser.add_argument("--min-k", type=int, help="Lower bound of k")
+    viralcc_parser.add_argument("--random-seed", type=int, help="Random seed")
+    viralcc_parser.add_argument("FASTA", help="Reference fasta")
+    viralcc_parser.add_argument("BAM", help="BAM file")
+    viralcc_parser.add_argument("VIRAL", help="Viral contig labels")
+    viralcc_parser.add_argument("OUTDIR", help="Output directory")
+
+    # Annotation
+    annotation_parser = subparsers.add_parser("annotation", help="Run annotation using GTDB-Tk classify_wf")
+    annotation_parser.add_argument("--genome_dir", required=True, help="Directory containing bin genomes")
+    annotation_parser.add_argument("--out_dir", dest="outdir", required=True, help="Output directory for annotation results")
+    annotation_parser.add_argument("--extension", help="Genome file extension (default: fa)")
+    annotation_parser.add_argument("--cpus", type=int, default=4, help="Number of CPUs (default: 4)")
+    annotation_parser.set_defaults(func=annotation)
+
+
     # Link the subcommand to the function
     refinement_parser.set_defaults(func=bin_refinement)
 
@@ -326,6 +394,12 @@ def main():
         scaffolding(args)
     elif args.command == "reassembly":
         reassembly(args)
+    elif args.command == "viralcc":
+        if args.viralcc_subcommand == "pipeline":
+            viralcc(args)
+    elif args.command == "annoation":
+        annotation(args)
+
 
 
 if __name__ == "__main__":

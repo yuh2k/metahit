@@ -21,7 +21,7 @@
 
 from collections import OrderedDict, namedtuple
 import Bio.SeqIO as SeqIO
-from Bio.SeqUtils import GC
+from Bio.SeqUtils import gc_fraction as GC
 from itertools import combinations
 from math import exp, log, sqrt
 import pandas as pd

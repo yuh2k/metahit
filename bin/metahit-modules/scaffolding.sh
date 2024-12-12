@@ -21,7 +21,7 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 mkdir "${path}/output/scaffolding/yahs"
-touch final.bin
+# touch final.bin
 SCAFFOLDING_SCRIPT="${path}/bin/metahit-scripts/scaffolding.py"
 if [ ! -f "$SCAFFOLDING_SCRIPT" ]; then
     echo "Error: scaffolding.py not found at $SCAFFOLDING_SCRIPT"

@@ -128,13 +128,31 @@ REFINEMENT_METHOD="metacc"
 #   -t 4 -m 24 -r 10000
 
 # echo "[INFO] Running Reassembly..."
-./metahit.py reassembly \
-  --bin "${OUTPUT_DIR}/bins" \
-  --hic1 "${OUTPUT_DIR}/readqc/hic/final_reads_1.fastq.gz" \
-  --hic2 "${OUTPUT_DIR}/readqc/hic/final_reads_2.fastq.gz" \
-  --sg1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq.gz" \
-  --sg2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq.gz" \
-  --bam "${OUTPUT_DIR}/alignment/sorted_map.bam" \
-  --outdir "${OUTPUT_DIR}/reassembly" \
-  -p "$(pwd)" \
-  -t 4 -m 24
+# ./metahit.py reassembly \
+#   --bin "${OUTPUT_DIR}/bins" \
+#   --hic1 "${OUTPUT_DIR}/readqc/hic/final_reads_1.fastq.gz" \
+#   --hic2 "${OUTPUT_DIR}/readqc/hic/final_reads_2.fastq.gz" \
+#   --sg1 "${OUTPUT_DIR}/readqc/sg/final_reads_1.fastq.gz" \
+#   --sg2 "${OUTPUT_DIR}/readqc/sg/final_reads_2.fastq.gz" \
+#   --bam "${OUTPUT_DIR}/alignment/sorted_map.bam" \
+#   --outdir "${OUTPUT_DIR}/reassembly" \
+#   -p "$(pwd)" \
+#   -t 4 -m 24
+
+# echo "[INFO] Running ViralCC pipeline..."
+# ./metahit.py viralcc pipeline\
+#     "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
+#     "${OUTPUT_DIR}/alignment/sorted_map.bam" \
+#     "${OUTPUT_DIR}/viral/viral_contigs.txt" \
+#     "${OUTPUT_DIR}/viralcc"
+
+
+# TODO CHANGE THIS
+ echo "[INFO] Running GTDB-Tk annotation..."
+./metahit.py annotation \
+    --genome_dir "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
+    --out_dir "${OUTPUT_DIR}/annotation_results" \
+    --extension fa \
+    --cpus 60
+
+

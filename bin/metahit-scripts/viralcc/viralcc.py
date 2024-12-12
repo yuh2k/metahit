@@ -148,4 +148,3 @@ if __name__ == '__main__':
     except ApplicationException:
         logger.error('ApplicationException Error')
         sys.exit(1)
-
