@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-
-if [ "$#" -lt 1 ]; then
-    echo " -p metahit path"
-    echo "Usage: $0 [options]"
-    echo ""
-    exit 1
-fi
-
+echo "Running: gtdbtk classify_wf"
+# Parse arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -p)
@@ -14,17 +8,29 @@ while [[ "$#" -gt 0 ]]; do
             shift 2
             ;;
         *)
-            # Stop parsing here
             break
             ;;
     esac
 done
-echo "Running GTDB"
-mkdir 123123
-mkdir ./{$path}/output/annotation
-eval "$(conda shell.bash hook)"
-conda activate gtdbtk-2.1.0
 
+# Check for required argument
+if [ -z "$path" ]; then
+    echo "Error: MetaHit path (-p) not provided."
+    exit 1
+fi
+
+# Create output directory
+mkdir -p "${path}/output/annotation"
+
+# Activate conda environment
+eval "$(conda shell.bash hook)"
+if ! conda activate gtdbtk-2.1.1; then
+    echo "Error: Could not activate conda environment 'gtdbtk-2.1.1'."
+    exit 1
+fi
+
+# Run GTDB-Tk annotation
+echo "Running: gtdbtk classify_wf $@"
 gtdbtk classify_wf "$@"
 if [ $? -ne 0 ]; then
     echo "Error: Annotation (GTDB-Tk) step failed."

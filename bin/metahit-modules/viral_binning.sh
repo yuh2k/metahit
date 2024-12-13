@@ -26,7 +26,6 @@ while [[ "$#" -gt 0 ]]; do
             ;;
     esac
 done
-
 VIRALCC_SCRIPT="${path}/bin/metahit-scripts/viralcc/viralcc.py"
 if [ ! -f "$VIRALCC_SCRIPT" ]; then
     echo "Error: viralcc.py not found at $VIRALCC_SCRIPT"

@@ -5,7 +5,7 @@ import sys
 import subprocess
 
 
-def make_dir(path, exist_ok=False):
+def make_dir(path, exist_ok=True):
     """
     Convenience method for making directories with a standard logic.
     An exception is raised when the specified path exists and is not a directory.

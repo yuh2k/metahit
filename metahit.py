@@ -214,10 +214,12 @@ def viralcc(args):
 
 
 def annotation(args):
-    print("[INFO] Running Annotation via GTDB-Tk classify_wf")
+    print("[INFO] Annotation function called.")
     output_dir = os.path.abspath(args.outdir)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+    print("[INFO] Output directory created:", output_dir)
+    
     command = (
         f'"{script_dir}/bin/metahit-modules/annotation.sh" '
         f'-p "{script_dir}" '
@@ -229,7 +231,9 @@ def annotation(args):
     if args.cpus:
         command += f'--cpus {args.cpus} '
 
+    print(f"[DEBUG] Running command: {command}")
     run_command(command)
+
 
 
 
@@ -375,7 +379,6 @@ def main():
     refinement_parser.set_defaults(func=bin_refinement)
 
     args = parser.parse_args()
-
     if args.command == "readqc":
         readqc(args)
     elif args.command == "assembly":
@@ -397,7 +400,7 @@ def main():
     elif args.command == "viralcc":
         if args.viralcc_subcommand == "pipeline":
             viralcc(args)
-    elif args.command == "annoation":
+    elif args.command == "annotation":
         annotation(args)
 
 

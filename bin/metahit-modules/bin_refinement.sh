@@ -25,8 +25,7 @@ OUTDIR=$3
 path=$4
 shift 4
 
-module load anaconda3 &&
-conda activate metahit_env
+
 
 # Path to the bin refinement Python script
 BIN_REFINEMENT_SCRIPT="${path}/bin/metahit-scripts/bin_refinement.py"
