@@ -13,20 +13,15 @@ help_message () {
     echo "    -l INT          Minimum length of assembled contigs (default=1000)"
     echo ""
     echo "    --megahit       Assemble with MEGAHIT (default)"
-    echo "    --k-min INT     MEGAHIT minimum k-mer size (default=21)"
-    echo "    --k-max INT     MEGAHIT maximum k-mer size (default=141)"
-    echo "    --k-step INT    MEGAHIT k-mer step size (default=12)"
-    echo ""
     echo "    --metaspades    Assemble with metaSPAdes instead of MEGAHIT"
-    echo "    --k-list STR    metaSPAdes k-mer sizes (e.g., '21,33,55,61'; default='21,33,55,61')"
+    echo "    --metaflye      Assemble with Flye"
+    echo "    --flye-method STR Flye method (e.g., --nano-raw, --nano-hq, --pacbio-raw)"
     echo ""
 }
 
 SOFT="./${path}/bin/metahit-scripts"
 
 # Default parameters
-# mem=24
-# Calculate default xmx as 0% of available memory
 available_mem_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 default_xmx=$((available_mem_kb * 80 / 100 / 1024))g
 mem=$default_xmx
@@ -36,10 +31,11 @@ reads_1="false"
 reads_2="false"
 min_len=1000
 merge_level="20,0.95"
-
+flye_method="--nano-raw"  # Default Flye method
 
 metaspades_assemble=false
 megahit_assemble=true
+flye_assemble=false
 
 # MEGAHIT default parameters
 k_min=21
@@ -50,15 +46,16 @@ k_step=12
 k_list="21,33,55,61"
 
 # Load in parameters
-OPTS=$(getopt -o hp:t:m:o:1:2:l:k: --long help,megahit,k-min:,k-max:,k-step:,spades,merge-level: -- "$@")
-
+OPTS=$(getopt -o hp:t:m:o:1:2:l: --long help,megahit,metaspades,metaflye,flye-method:,k-min:,k-max:,k-step:,k-list:,merge-level: -- "$@")
 if [ $? != 0 ]; then help_message; exit 1; fi
 
 eval set -- "$OPTS"
 
 while true; do
     case "$1" in
-        -p) path=$2; shift 2;; 
+        --metaflye) flye_assemble=true; megahit_assemble=false; metaspades_assemble=false; shift ;;
+        --flye-method) flye_method=$2; shift 2;;
+        -p) path=$2; shift 2;;
         -t) threads=$2; shift 2;;
         -m) mem=$2; shift 2;;
         -o) out=$2; shift 2;;
@@ -91,6 +88,10 @@ fi
 
 if [ "$megahit_assemble" = true ] && ! command -v megahit &> /dev/null; then
     echo "[ERROR] MEGAHIT is not installed or not in the PATH."; exit 1
+fi
+
+if [ "$flye_assemble" = true ] && ! command -v flye &> /dev/null; then
+    echo "[ERROR] Flye is not installed or not in the PATH."; exit 1
 fi
 
 if ! command -v quast.py &> /dev/null; then
@@ -154,19 +155,29 @@ fi
 # Run the selected assembler
 if [ "$metaspades_assemble" = true ]; then
     echo "ASSEMBLING WITH metaSPAdes"
-    mkdir -p "${out}/metaspades.tmp"
-    echo "Using k-mer sizes: $k_list"
     metaspades.py --tmp-dir "${out}/metaspades.tmp" -k "$k_list" -t "$threads" -m "$mem" -o "${out}/metaspades" -1 "$reads_1" -2 "$reads_2"
-    if [ -d "${out}/metaspades.tmp" ]; then rm -r "${out}/metaspades.tmp"; fi
     if [ ! -f "${out}/metaspades/scaffolds.fasta" ]; then echo "Error: metaSPAdes assembly failed."; exit 1; fi
 fi
 
 if [ "$megahit_assemble" = true ]; then
     echo "ASSEMBLING WITH MEGAHIT"
-    echo "Using k-mer sizes from $k_min to $k_max with step size $k_step"
     megahit -1 "$reads_1" -2 "$reads_2" -o "${out}/megahit" --min-contig-len "$min_len" --k-min "$k_min" --k-max "$k_max" --k-step "$k_step" --merge-level "$merge_level" -t "$threads" -m "${mem}000000000"
     if [ ! -f "${out}/megahit/final.contigs.fa" ]; then echo "Error: MEGAHIT assembly failed."; exit 1; fi 
 fi
+
+if [ "$flye_assemble" = true ]; then
+    echo "[INFO] Assembling with Flye..."
+    if [ -z "$flye_method" ]; then
+        flye_method="--nano-raw"  # Default Flye method
+    fi
+    echo "$flye_method"
+    flye "$flye_method" "$reads_1" "$reads_2" --meta -t "$threads" --out-dir "$out"
+    if [ ! -f "${out}/assembly.fasta" ]; then
+        echo "[ERROR] Flye assembly failed."
+        exit 1
+    fi
+fi
+
 
 # Process the assembly output
 if [ "$metaspades_assemble" = true ]; then
@@ -177,8 +188,11 @@ if [ "$megahit_assemble" = true ]; then
     cat "${out}/megahit/final.contigs.fa" > "${out}/final_assembly.fasta"
 fi
 
-if [[ ! -s "${out}/final_assembly.fasta" ]]; then echo "Error: Final assembly failed."; exit 1; fi
+if [ "$flye_assemble" = true ]; then
+    cp "${out}/assembly.fasta" "${out}/final_assembly.fasta"
+fi
 
+if [[ ! -s "${out}/final_assembly.fasta" ]]; then echo "Error: Final assembly failed."; exit 1; fi
 
 echo "RUNNING ASSEMBLY QC WITH QUAST"
 quast.py -t "$threads" -o "${out}/QUAST_out" "${out}/final_assembly.fasta" 

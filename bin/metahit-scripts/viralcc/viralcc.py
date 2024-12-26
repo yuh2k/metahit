@@ -78,7 +78,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     try:
-        make_dir(args.OUTDIR, args.cover)
+        make_dir(args.OUTDIR, True)
     except IOError:
         print('Error: cannot find out directory or the directory already exists')
         sys.exit(1)

@@ -45,17 +45,37 @@ def assembly(args):
     print("[INFO] Running Assembly")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-    r1_path = find_fastq(args.r1)
-    r2_path = find_fastq(args.r2)
-    command = script_dir+f"/bin/metahit-modules/assembly.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -o {output_dir} -m {args.memory} -t {args.threads}"
-    if args.min_len:
-        command += f" -l {args.min_len}"
-    if args.megahit:
-        command += f" --megahit --k-min {args.k_min} --k-max {args.k_max} --k-step {args.k_step} --merge-level {args.merge_level}"
-    elif args.metaspades:
-        command += f" --metaspades --k-list {args.k_list}"
 
-    run_command(command)
+    if args.metaflye:
+        # Validate R1 and R2 files
+        if not args.r1 or not args.r2:
+            print("[ERROR] Flye assembly requires both R1 and R2 FASTQ files specified with -1 and -2.")
+            exit(1)
+        r1_path = find_fastq(args.r1)
+        r2_path = find_fastq(args.r2)
+
+        # Validate Flye method or use default
+        flye_method = args.method if args.method else "--nano-raw"
+
+        # Construct Flye command
+        command = script_dir + f"/bin/metahit-modules/assembly.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -o {output_dir} --metaflye --flye-method --{flye_method}"
+        run_command(command)
+    else:
+        # Handle other assembly methods
+        r1_path = find_fastq(args.r1)
+        r2_path = find_fastq(args.r2)
+
+        command = script_dir + f"/bin/metahit-modules/assembly.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -o {output_dir} -m {args.memory} -t {args.threads}"
+        if args.min_len:
+            command += f" -l {args.min_len}"
+        if args.megahit:
+            command += f" --megahit --k-min {args.k_min} --k-max {args.k_max} --k-step {args.k_step}"
+        elif args.metaspades:
+            command += f" --metaspades --k-list {args.k_list}"
+
+        run_command(command)
+
+
 
 def alignment(args):
     print("[INFO] Running Alignment")
@@ -207,7 +227,6 @@ def viralcc(args):
     if args.random_seed:
         command += f"--random-seed {args.random_seed} "
 
-    # 必选参数：FASTA, BAM, VIRAL, OUTDIR
     command += f'"{args.FASTA}" "{args.BAM}" "{args.VIRAL}" "{output_dir}"'
 
     run_command(command)
@@ -233,6 +252,23 @@ def annotation(args):
 
     print(f"[DEBUG] Running command: {command}")
     run_command(command)
+
+def bin_plot(args):
+    print("[INFO] Running Bin Plot")
+    output_dir = absolute_path(args.OUTDIR)
+    ensure_dir_exists(output_dir)
+
+    contact_map_path = absolute_path(args.contact_map)
+    bin_path = absolute_path(args.BIN)
+
+    command = (
+        f'"{script_dir}/bin/metahit-modules/bin_plot.sh" '
+        f'--contact-map "{contact_map_path}" '
+        f'--BIN "{bin_path}" '
+        f'--OUTDIR "{output_dir}"'
+    )
+    run_command(command)
+
 
 
 
@@ -274,6 +310,8 @@ def main():
     asm_parser.add_argument("--k-list", default="21,33,55,77", help="List of k-mers for metaSPAdes")
     asm_parser.add_argument("-l", "--min-len", type=int, default=1000, help="Minimum contig length")
     asm_parser.add_argument("--merge-level", default="20,0.95", help="Merge level for MEGAHIT (default='20,0.95')")
+    asm_parser.add_argument("--metaflye", action="store_true", help="Use Flye for assembly")
+    asm_parser.add_argument("--method", required=False, help="Flye method (e.g., --nano-raw, --nano-hq, --pacbio-raw)")
 
 
     # Alignment
@@ -373,6 +411,14 @@ def main():
     annotation_parser.add_argument("--extension", help="Genome file extension (default: fa)")
     annotation_parser.add_argument("--cpus", type=int, default=4, help="Number of CPUs (default: 4)")
     annotation_parser.set_defaults(func=annotation)
+
+    # Bin Plot Command
+    bin_plot_parser = subparsers.add_parser("bin_plot", help="Generate a bin plot for clustering results")
+    bin_plot_parser.add_argument("--contact-map", required=True, help="Path to the contact map object")
+    bin_plot_parser.add_argument("--BIN", required=True, help="Path to the clustering BIN file")
+    bin_plot_parser.add_argument("--OUTDIR", required=True, help="Output directory for the bin plot")
+    bin_plot_parser.set_defaults(func=bin_plot)
+
 
 
     # Link the subcommand to the function

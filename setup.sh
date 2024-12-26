@@ -2,7 +2,7 @@
 
 # setup.sh
 # This script sets up the necessary dependencies for the MetaHit pipeline.
-# It downloads BWA (from GitHub, builds it), Samtools, and BBTools
+# It downloads BWA (from GitHub, builds it), and BBTools
 # into the "external" directory within the repository.
 
 # Exit immediately if a command exits with a non-zero status
@@ -66,44 +66,6 @@ function install_bwa() {
     echo_info "BWA built and installed successfully."
 }
 
-# Function to download, extract, and install Samtools
-function install_samtools() {
-    SAMTOOLS_VERSION="1.20"
-    SAMTOOLS_TARBALL="samtools-${SAMTOOLS_VERSION}.tar.bz2"
-    SAMTOOLS_URL="https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERSION}/samtools-${SAMTOOLS_VERSION}.tar.bz2"
-
-    if [ ! -f "${EXTERNAL_DIR}/${SAMTOOLS_TARBALL}" ]; then
-        echo_info "Downloading Samtools ${SAMTOOLS_VERSION}..."
-        wget -O "${EXTERNAL_DIR}/${SAMTOOLS_TARBALL}" "${SAMTOOLS_URL}"
-    else
-        echo_info "Samtools tarball already exists, skipping download."
-    fi
-
-    if [ ! -f "${EXTERNAL_DIR}/samtools/bin/samtools" ]; then
-        echo_info "Extracting Samtools..."
-        tar -xjf "${EXTERNAL_DIR}/${SAMTOOLS_TARBALL}" -C "$EXTERNAL_DIR"
-        cd "${EXTERNAL_DIR}/samtools-${SAMTOOLS_VERSION}"
-        echo_info "Configuring Samtools..."
-        ./configure --prefix="${EXTERNAL_DIR}/samtools"
-        echo_info "Building Samtools..."
-        make
-        echo_info "Installing Samtools..."
-        make install
-        cd ../..
-
-        echo_info "Creating a symbolic link to samtools binary in 'external/bin'..."
-        ln -sf "${EXTERNAL_DIR}/samtools/bin/samtools" "${BIN_DIR}/samtools"
-
-        echo_info "Cleaning up Samtools source directory..."
-        rm -rf "${EXTERNAL_DIR}/samtools-${SAMTOOLS_VERSION}" "${EXTERNAL_DIR}/${SAMTOOLS_TARBALL}"
-
-        echo_info "Samtools installed successfully."
-    else
-        echo_info "Samtools binary already exists in 'external/bin', skipping compilation."
-    fi
-}
-
-
 function install_bbtools() {
     BBTOOLS_VERSION="39.10"  # Latest version as per user request
     BBTOOLS_TARBALL="Bbmap_${BBTOOLS_VERSION}.tar.gz"
@@ -135,7 +97,6 @@ function install_bbtools() {
 
 # Install all dependencies
 install_bwa
-install_samtools
 install_bbtools 
 # Verify installations
 echo_info "Verifying installations..."
@@ -147,18 +108,22 @@ else
     echo_info "BWA installed successfully."
 fi
 
-if [ ! -f "${BIN_DIR}/samtools" ]; then
-    echo_error "Samtools binary not found in external/bin."
-    exit 1
-else
-    echo_info "Samtools installed successfully."
+
+# Check if the gtdbtk-2.4.0 environment exists
+if ! conda info --envs | grep -q "gtdbtk-2.4.0"; then
+    echo "[INFO] Creating GTDB-Tk environment 'gtdbtk-2.4.0'..."
+    conda create -n gtdbtk-2.4.0 -c bioconda -c conda-forge gtdbtk=2.4.0 -y
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to create GTDB-Tk environment."
+        exit 1
+    fi
 fi
+
 
 conda env create -f env.yaml
 # Ensure all external binaries have execute permissions
 echo_info "Ensuring all external binaries have execute permissions."
 chmod +x "${BIN_DIR}/bwa"
-chmod +x "${BIN_DIR}/samtools"
 chmod +x "${BIN_DIR}"/*
 
 # Optionally, add external/bin to PATH
