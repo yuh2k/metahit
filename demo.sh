@@ -168,8 +168,16 @@ echo "[INFO] Running ViralCC pipeline..."
     --cpus 60
 
 
-# TODO CHANGE THE BIN FILE
+# TODO CHANGE THE FILES
 # ./metahit.py bin_plot \
 #     --contact-map "path/to/contact_map.pkl" \
 #     --BIN "path/to/clustering_result.bin" \
 #     --OUTDIR "${OUTPUT_DIR}/bin_plot"
+
+# TODO CHANGE THE FILES
+./metahit.py virus_host_interaction \
+    --BIN "path/to/binning_result.txt" \
+    --viral-contig "path/to/viral_contig_list.txt" \
+    --contact "path/to/contact_matrix" \
+    --OUTDIR "path/to/output_directory" \
+    -t 8 -m 32

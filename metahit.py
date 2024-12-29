@@ -269,6 +269,23 @@ def bin_plot(args):
     )
     run_command(command)
 
+def virus_host_interaction(args):
+    print("[INFO] Running Virus-Host Interaction")
+    output_dir = absolute_path(args.OUTDIR)
+    ensure_dir_exists(output_dir)
+
+    bin_file = absolute_path(args.BIN)
+    viral_contig_file = absolute_path(args.viral_contig)
+    contact_file = absolute_path(args.contact)
+
+    command = (
+        f'"{script_dir}/bin/metahit-modules/virus_host_interaction.sh" '
+        f'--BIN "{bin_file}" '
+        f'--viral-contig "{viral_contig_file}" '
+        f'--contact "{contact_file}" '
+        f'--OUTDIR "{output_dir}" -p "{script_dir}" -t {args.threads} -m {args.memory}'
+    )
+    run_command(command)
 
 
 
@@ -419,6 +436,16 @@ def main():
     bin_plot_parser.add_argument("--OUTDIR", required=True, help="Output directory for the bin plot")
     bin_plot_parser.set_defaults(func=bin_plot)
 
+    # Virus-Host Interaction Command
+    virus_host_parser = subparsers.add_parser("virus_host_interaction", help="Analyze virus-host interactions")
+    virus_host_parser.add_argument("--BIN", required=True, help="Path to binning result file")
+    virus_host_parser.add_argument("--viral-contig", required=True, help="Path to viral contig list file")
+    virus_host_parser.add_argument("--contact", required=True, help="Path to contact matrix file")
+    virus_host_parser.add_argument("--OUTDIR", required=True, help="Output directory for results")
+    virus_host_parser.add_argument("-p", "--metahit_path", help="Path to metahit folder", default=script_dir)
+    virus_host_parser.add_argument("-t", "--threads", type=int, default=4, help="Number of threads")
+    virus_host_parser.add_argument("-m", "--memory", type=int, default=24, help="Memory in GB")
+    virus_host_parser.set_defaults(func=virus_host_interaction)
 
 
     # Link the subcommand to the function
