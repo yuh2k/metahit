@@ -13,4 +13,6 @@ print(f"Matrix shape: {matrix.shape}")
 print(f"Matrix type: {type(matrix)}")
 
 dense_matrix = matrix.toarray()
-print(dense_matrix[:20, :20])
+print(dense_matrix[:10, :10])
+
+# python npz_view_tool.py --file output1/metacc/raw_contact_matrix_metacc.npz
