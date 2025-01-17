@@ -150,7 +150,7 @@ echo "[INFO] Running Reassembly..."
   -t 4 -m 24
 
 # Viral CC
-TODO: change viral_contigs.txt file
+# TODO: change viral_contigs.txt file
 echo "[INFO] Running ViralCC pipeline..."
 ./metahit.py viralcc pipeline\
     "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
