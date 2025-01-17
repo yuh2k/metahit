@@ -125,7 +125,7 @@ echo "[INFO] Running Bin Refinement Process..."
 
 
 
-Scaffolding
+# Scaffolding
 echo "[INFO] Running Scaffolding..."
 ./metahit.py scaffolding \
   --fasta "${OUTPUT_DIR}/assembly/final_assembly.fasta" \
@@ -174,10 +174,10 @@ echo "[INFO] Running ViralCC pipeline..."
 #     --BIN "path/to/clustering_result.bin" \
 #     --OUTDIR "${OUTPUT_DIR}/bin_plot"
 
-# TODO CHANGE THE FILES
+# TODO CHANGE THE FILES, repleace it by the real paths
 ./metahit.py virus_host_interaction \
     --BIN "path/to/binning_result.txt" \
     --viral-contig "path/to/viral_contig_list.txt" \
     --contact "path/to/contact_matrix" \
-    --OUTDIR "path/to/output_directory" \
+    --OUTDIR "output/virus_host_interaction" \
     -t 8 -m 32
