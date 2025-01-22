@@ -2,7 +2,6 @@
 
 # setup.sh
 # This script sets up the necessary dependencies for the MetaHit pipeline.
-# It downloads BWA (from GitHub, builds it), and BBTools
 # into the "external" directory within the repository.
 
 # Exit immediately if a command exits with a non-zero status
@@ -41,30 +40,7 @@ fi
 echo_info "Installing dependencies using Conda..."
 conda install -y -c bioconda wget unzip openjdk perl git
 
-# Function to download and build BWA from GitHub
-function install_bwa() {
-    echo_info "Cloning BWA repository from GitHub..."
-    cd "$EXTERNAL_DIR"
-    
-    # Remove existing 'bwa' directory if it exists to prevent conflicts
-    if [ -d "bwa" ]; then
-        echo_info "Removing existing 'bwa' directory to ensure a clean build."
-        rm -rf bwa
-    fi
 
-    git clone https://github.com/lh3/bwa.git
-    cd bwa
-    echo_info "Building BWA..."
-    make
-
-    echo_info "Copying BWA binary to 'external/bin'."
-    cp bwa "$BIN_DIR/"
-
-    cd ..
-    # Clean up
-    rm -rf bwa
-    echo_info "BWA built and installed successfully."
-}
 
 function install_bbtools() {
     BBTOOLS_VERSION="39.10"  # Latest version as per user request
@@ -96,17 +72,10 @@ function install_bbtools() {
 }
 
 # Install all dependencies
-install_bwa
 install_bbtools 
 # Verify installations
 echo_info "Verifying installations..."
 
-if [ ! -f "${BIN_DIR}/bwa" ]; then
-    echo_error "BWA binary not found in external/bin."
-    exit 1
-else
-    echo_info "BWA installed successfully."
-fi
 
 
 # Check if the gtdbtk-2.4.0 environment exists
@@ -123,7 +92,6 @@ fi
 conda env create -f env.yaml
 # Ensure all external binaries have execute permissions
 echo_info "Ensuring all external binaries have execute permissions."
-chmod +x "${BIN_DIR}/bwa"
 chmod +x "${BIN_DIR}"/*
 
 # Optionally, add external/bin to PATH
