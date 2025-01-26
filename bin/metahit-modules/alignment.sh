@@ -85,8 +85,8 @@ READS_2=${READS_2:-"output/readqc/hic/final_reads_2.fastq"}
 OUTPUT_DIR=${OUTPUT_DIR:-"output/alignment"}
 
 # Define tool paths
-BWA_PATH="${path}/external/bin/bwa"
-SAMTOOLS_PATH="${path}/external/bin/samtools"
+BWA_PATH="bwa"
+SAMTOOLS_PATH="samtools"
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
