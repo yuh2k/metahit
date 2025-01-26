@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 echo "[INFO] Running Virus-Host Interaction Analysis"
-
+echo "[FREE MEMORY]: $free_mem"
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+echo "[FREE MEMORY]: $free_mem"
 echo "[INFO] Running Bin Plot"
 
 # Parse arguments

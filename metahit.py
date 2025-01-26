@@ -108,7 +108,7 @@ def raw_contact(args):
         exit(1)
 
     command = (
-        script_dir+f"/bin/metahit-modules/raw_contact1.sh -p {script_dir} --bam {absolute_path(args.bam)} "
+        script_dir+f"/bin/metahit-modules/raw_contact.sh -p {script_dir} --bam {absolute_path(args.bam)} "
         f"--fasta {absolute_path(args.fasta)} --out {output_dir} --enzyme {args.enzyme}"
     )
     

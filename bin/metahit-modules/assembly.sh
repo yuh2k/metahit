@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+echo "[FREE MEMORY]: $free_mem"
 help_message () {
     echo ""
     echo "Usage: metahit assembly [options] -1 reads_1.fastq -2 reads_2.fastq -o output_dir"

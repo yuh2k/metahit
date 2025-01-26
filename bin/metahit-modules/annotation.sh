@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+echo "[FREE MEMORY]: $free_mem"
 echo "Running: gtdbtk classify_wf"
 
 # Parse arguments

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+echo "[FREE MEMORY]: $free_mem"
 # If no arguments, show usage
 if [ "$#" -lt 1 ]; then
     echo " -p metahit path"

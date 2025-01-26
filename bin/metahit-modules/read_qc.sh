@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+echo "[FREE MEMORY]: $free_mem"
 ###########################################################################################################
 # This script is a comprehensive solution to QC HiSeq reads in preparation for assembly and other
 # operations. The main tasks are read trimming based on quality scores and producing FASTQC reports.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+echo "[FREE MEMORY]: $free_mem"
 if [ "$#" -lt 1 ]; then
     echo " -p metahit path"
     echo "Usage: $0 <command> [options]"

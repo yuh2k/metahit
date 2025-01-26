@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+echo "[FREE MEMORY]: $free_mem"
 # Script to perform bin refinement for Metahit
 
 # Display usage if not enough arguments

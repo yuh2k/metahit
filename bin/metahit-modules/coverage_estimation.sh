@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+echo "[FREE MEMORY]: $free_mem"
 # Coverage Estimation Script using BBMap and jgi_summarize_bam_contig_depths.
 
 set -e
