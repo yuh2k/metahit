@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 free_mem=$(free -h | awk '/^Mem:/ {print $4}')
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
 echo "[FREE MEMORY]: $free_mem"
 set -e
 set -o pipefail

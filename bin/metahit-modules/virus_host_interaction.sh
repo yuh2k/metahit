@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 echo "[INFO] Running Virus-Host Interaction Analysis"
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
 echo "[FREE MEMORY]: $free_mem"
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do

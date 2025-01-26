@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
 echo "[FREE MEMORY]: $free_mem"
 ###########################################################################################################
 # This script is a comprehensive solution to QC HiSeq reads in preparation for assembly and other

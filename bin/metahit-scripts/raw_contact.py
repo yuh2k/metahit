@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import os
-import logging
+'''
+libraries for metacc
+'''
 from collections import OrderedDict, namedtuple
 from collections.abc import Iterable
 from Bio.Restriction import Restriction
@@ -11,47 +12,104 @@ import numpy as np
 import pysam
 import scipy.sparse as scisp
 import tqdm
-from raw_utils import count_fasta_sequences, open_input
-import argparse
+import os
+from MetaCC.Script.utils import count_fasta_sequences, open_input
+import logging
+import pandas as pd
+'''
+libraries for bin3c
+'''
+import matplotlib
+matplotlib.use('Agg')
 
-# Configure logger to output debug information
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+from bin3C_python3.mzd import io_utils, sparse_utils
+from bin3C_python3.mzd.seq_utils import *
+from collections import OrderedDict, namedtuple
+from numba import jit, int64, float64, void
+import Bio.SeqIO as SeqIO
+import logging
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import numpy as np
+import pysam
+import scipy.sparse as sp
+import tqdm
 
-# Package logger
+# package logger
 logger = logging.getLogger(__name__)
 
-SeqInfo = namedtuple('SeqInfo', ['localid', 'refid', 'name', 'sites', 'length', 'covcc'])  # create a new class of tuple: SeqInfo
+#######offset is the enumeration of the length######################
+#localid is the index of the list#
+#refid is the index of the fasta file, which is a global index# 
+
+def mean_selector(name):
+    """
+    Basic Mean functions
+    """
+    def geometric_mean(x, y):
+        return (x*y)**0.5
+
+    def harmonic_mean(x, y):
+        return 2*x*y/(x+y)
+
+    def arithmetic_mean(x, y):
+        return 0.5*(x+y)
+
+    try:
+        mean_switcher = {
+            'geometric': geometric_mean,
+            'harmonic': harmonic_mean,
+            'arithmetic': arithmetic_mean
+        }
+        return mean_switcher[name]
+    except KeyError:
+        raise RuntimeError('unsupported mean type [{}]'.format(name))
+
+
+
+
+SeqInfo_metacc = namedtuple('SeqInfo_metacc', ['localid_metacc', 'refid', 'name', 'sites', 'length', 'covcc', 'signal'])
+
+SeqInfo_bin3c = namedtuple('SeqInfo_bin3c', ['offset', 'refid', 'name', 'length', 'sites'])
 
 class SiteCounter(object):
-    def __init__(self, enzyme_names, is_linear=True):
+
+    def __init__(self, enzyme_names,  is_linear=True):
         """
         Simple class to count the total number of enzymatic cut sites for the given
-        list of enzymes.
-        :param enzyme_names: a list of enzyme names (proper case-sensitive spelling a la NEB)
+        list if enzymes.
+        :param enzyme_names: a list of enzyme names (proper case sensitive spelling a la NEB)
         :param is_linear: Treat sequence as linear.
         """
         if isinstance(enzyme_names, str):
             enzyme_names = [enzyme_names]
         assert (isinstance(enzyme_names, Iterable) and
-                not isinstance(enzyme_names, str)), 'enzyme_names must be a collection of names'
-        self.enzymes = [getattr(Restriction, en) for en in enzyme_names]  # get the enzyme name from the standard module
+                not isinstance(enzyme_names, str)), 'enzyme_names must of a collection of names'
+        self.enzymes = [getattr(Restriction , en) for en in enzyme_names] ##get the enzyme name from the standard module
         self.is_linear = is_linear
+
 
     def count_sites(self, seq):
         """
         Count the number of sites found in the given sequence, where sites from
-        all specified enzymes are combined.
+        all specified enzymes are combined
+
         :param seq: Bio.Seq object
         :return: the total number of sites
         """
+
         return sum(len(en.search(seq, self.is_linear)) for en in self.enzymes)
 
 
+
+
 class Sparse2DAccumulator(object):
-    # Create a 2D coo sparse matrix
+######create a 2D coo sparse matrix###########
     def __init__(self, N):
         self.shape = (N, N)
         self.mat = {}
+        ##mat is a dictionary here
+        # fixed counting type
         self.dtype = np.uint32
 
     def setitem(self, index, value):
@@ -67,13 +125,14 @@ class Sparse2DAccumulator(object):
     def get_coo(self, symm=True):
         """
         Create a COO format sparse representation of the accumulated values.
+
         :param symm: ensure matrix is symmetric on return
         :return: a scipy.coo_matrix sparse matrix
         """
         coords = [[], []]
         data = []
         m = self.mat
-        for i, j in m.keys():
+        for i, j in m.keys(): ##m.keys() will return a tuple of two values
             coords[0].append(i)
             coords[1].append(j)
             data.append(m[i, j])
@@ -86,118 +145,542 @@ class Sparse2DAccumulator(object):
         return m.tocoo()
 
 
-class ContactMatrix:
-    def __init__(self, bam_file, enzymes, seq_file, path, min_mapq=30, min_len=1000, min_match=30, min_signal=2, coverage_file=None):
-        # bam_file: alignment info of Hi-C library on contigs in bam
-        # enzymes: name of restriction enzymes used in Hi-C experiments
-        # seq_file: store the assembly contigs in fasta
-        # path: output path
-        # min_mapq: minimal mapping quality (default 30)
-        # min_len: minimal length of contigs (default 1000bp)
+def fast_norm_fullseq_bysite(rows, cols, data, sites):
+    """
+    In-place normalisation of the scipy.coo_matrix for full sequences
 
+    :param rows: the COO matrix coordinate member variable (4xN array)
+    :param cols: the COO matrix coordinate member variable (4xN array)
+    :param data:  the COO matrix data member variable (1xN array)
+    :param sites: per-element min(sequence_length, tip_size)
+    """
+    for n in range(data.shape[0]):
+        i = rows[n]
+        j = cols[n]
+        data[n] *= 1.0/(sites[i] * sites[j])
+        
+class SeqOrder:
+
+    FORWARD = 1
+    REVERSE = -1
+
+    ACCEPTED = True
+    EXCLUDED = False
+
+    STRUCT_TYPE = np.dtype([('pos', int), ('ori', int), ('mask', bool), ('length', int)])
+    INDEX_TYPE = np.dtype([('index', int), ('ori', int)])
+
+    def __init__(self, seq_info):
+        """
+        Initial order is determined by the order of supplied sequence information dictionary. Sequences
+        are given surrogate ids using consecutive integers. Member functions expect surrogate ids
+        not original names.
+
+        The class also retains orientation and masking state. Orientation defines whether a sequence
+        should be in its original direction (as read in) (1) or reverse complemented (-1).
+
+        Masking state defines whether a input sequence shall been excluded from further consideration.
+        (accepted=1, excluded=0)
+
+        :param seq_info: sequence information dictionary
+        """
+        self._positions = None
+        _ord = np.arange(len(seq_info), dtype=int)
+        self.order = np.array(
+            [(_ord[i], SeqOrder.FORWARD, SeqOrder.ACCEPTED, seq_info[i].length) for i in range(len(_ord))],
+            dtype=SeqOrder.STRUCT_TYPE)
+
+        self._update_positions()
+
+    @staticmethod
+    def asindex(_ord):
+        """
+        Convert a simple list or ndarray of indices, to INDEX_TYPE array with default forward orientation.
+
+        :param _ord: list/ndarray of indices
+        :return: INDEX_TYPE array
+        """
+        assert isinstance(_ord, (list, np.ndarray)), 'input must be a list or ndarray'
+        return np.array(list(zip(_ord, np.ones_like(_ord, dtype=bool))), dtype=SeqOrder.INDEX_TYPE)
+
+    def _update_positions(self):
+        """
+        An optimisation, whenever the positional state changes, this method must be called to
+        maintain the current state in a separate array. This avoids unnecessary recalculation
+        overhead.
+        """
+        # Masked sequences last, then by current position.
+        sorted_indices = np.lexsort([self.order['pos'], ~self.order['mask']])
+        for n, i in enumerate(sorted_indices):
+            self.order[i]['pos'] = n
+        self._positions = np.argsort(self.order['pos'])
+
+    def remap_gapless(self, gapless_indices):
+        """
+        Recover the original, potentially sparse (gapped) indices from a dense (gapless) set
+        of indices. Gaps originate from sequences being masked in the order. External tools
+        often expect and return dense indices. When submitting changes to the current order
+        state, it is important to first apply this method and reintroduce any gaps.
+
+        Both a list/array of indices or a INDEX_TYPE array can be passed.
+
+        :param gapless_indices: dense list of indices or an ndarray of type INDEX_TYPE
+        :return: remappped indices with gaps (of a similar type to input)
+        """
+        # not as yet verified but this method is being replaced by the 50x faster numpy
+        # alternative below. The slowless shows for large problems and repeated calls.
+        # we ~could~ go further and maintain the shift array but this will require
+        # consistent and respectful (fragile) use of mutator methods and not direct access on mask
+        # or an observer.
+
+        # the accumulated shifts due to masked sequences (the gaps).
+        # we remove the masked sequences to make this array gapless
+        shift = np.cumsum(~self.order['mask'])[self.order['mask']]
+
+        # now reintroduce the gaps to the gapless representation supplied
+
+        # handle our local type
+        if isinstance(gapless_indices, np.ndarray) and gapless_indices.dtype == SeqOrder.INDEX_TYPE:
+            remapped = []
+            for oi in gapless_indices:
+                remapped.append((oi['index'] + shift[oi['index']], oi['ori']))
+            return np.array(remapped, dtype=SeqOrder.INDEX_TYPE)
+
+        # handle plain collection
+        else:
+            remapped = []
+            for oi in gapless_indices:
+                remapped.append(oi + shift[oi])
+            return np.array(remapped)
+
+    def accepted_positions(self, copy=True):
+        """
+        The current positional order of only those sequences which have not been excluded by the mask.
+        :param copy: return a copy
+        :return: all accepted positons in order of index
+        """
+        return self.all_positions(copy=copy)[:self.count_accepted()]
+
+    def all_positions(self, copy=True):
+        """
+        The current positional order of all sequences. Internal logic relegates masked sequences to always come
+        last and ascending surrogate id order.
+
+        :param copy: return a copy of the positions
+        :return: all positions in order of index, masked or not.
+        """
+        if copy:
+            _p = self._positions.copy()
+        else:
+            _p = self._positions
+        return _p
+
+
+    def gapless_positions(self):
+        """
+        A dense index range representing the current positional order without masked sequences. Therefore
+        the returned array does not contain surrogate ids, but rather the relative positions of unmasked
+        sequences, when all masked sequences have been discarded.
+
+        :return: a dense index range of positional order, once all masked sequences have been discarded.
+        """
+        # accumulated shift from gaps
+        gap_shift = np.cumsum(~self.order['mask'])
+        # just unmasked sequences
+        _p = np.argsort(self.order['pos'])
+        _p = _p[:self.count_accepted()]
+        # removing gaps leads to a dense range of indices
+        _p -= gap_shift[_p]
+        return _p
+
+    def set_mask_only(self, _mask):
+        """
+        Set the mask state of all sequences, where indices in the mask map to
+        sequence surrogate ids.
+
+        :param _mask: mask array or list, boolean or 0/1 valued
+        """
+        _mask = np.asarray(_mask, dtype=bool)
+        assert len(_mask) == len(self.order), 'supplied mask must be the same length as existing order'
+        assert np.all((_mask == SeqOrder.ACCEPTED) | (_mask == SeqOrder.EXCLUDED)), \
+            'new mask must be {} or {}'.format(SeqOrder.ACCEPTED, SeqOrder.EXCLUDED)
+
+        # assign mask
+        self.order['mask'] = _mask
+        self._update_positions()
+
+
+    def set_order_and_orientation(self, _ord, implicit_excl=False):
+        """
+        Set only the order, while ignoring orientation. An ordering is defined
+        as a 1D array of the structured type INDEX_TYPE, where elements are the
+        position and orientation of each indices.
+
+        NOTE: This definition can be the opposite of what is returned by some
+        ordering methods, and np.argsort(_v) should inverse the relation.
+
+        NOTE: If the order includes only active sequences, setting implicit_excl=True
+        the method will implicitly assume unmentioned ids are those currently
+        masked. An exception is raised if a masked sequence is included in the order.
+
+        :param _ord: 1d ordering
+        :param implicit_excl: implicitly extend the order to include unmentioned excluded sequences.
+        """
+        assert _ord.dtype == SeqOrder.INDEX_TYPE, 'Wrong type supplied, _ord should be of INDEX_TYPE'
+
+        if len(_ord) < len(self.order):
+            # some sanity checks
+            assert implicit_excl, 'Use implicit_excl=True for automatic handling ' \
+                                  'of orders only mentioning accepted sequences'
+            assert len(_ord) == self.count_accepted(), 'new order must mention all ' \
+                                                       'currently accepted sequences'
+            # those surrogate ids mentioned in the order
+            mentioned = set(_ord['index'])
+            assert len(mentioned & set(self.excluded())) == 0, 'new order and excluded must not ' \
+                                                               'overlap when using implicit assignment'
+            assert len(mentioned ^ set(self.accepted())) == 0, 'incomplete new order supplied,' \
+                                                               'missing accepted ids'
+            # assign the new orders
+            self.order['pos'][_ord['index']] = np.arange(len(_ord), dtype=int)
+            self.order['ori'][_ord['index']] = _ord['ori']
+            # mask remaining, unmentioned indices
+            _mask = np.zeros_like(self.mask_vector(), dtype=bool)
+            _mask[_ord['index']] = True
+            self.set_mask_only(_mask)
+        else:
+            # just a simple complete order update
+            assert len(_ord) == len(self.order), 'new order was a different length'
+            assert len(set(_ord['index']) ^ set(self.accepted())) == 0, 'incomplete new order supplied,' \
+                                                                        'missing accepted ids'
+            self.order['pos'][_ord['index']] = np.arange(len(_ord), dtype=int)
+            self.order['ori'][_ord['index']] = _ord['ori']
+
+        self._update_positions()
+
+    
+
+    def mask_vector(self):
+        """
+        :return: the current mask vector
+        """
+        return self.order['mask']
+
+    def mask(self, _id):
+        """
+        Mask an individual sequence by its surrogate id
+
+        :param _id: the surrogate id of sequence
+        """
+        self.order[_id]['mask'] = False
+        self._update_positions()
+
+    def count_accepted(self):
+        """
+        :return: the current number of accepted (unmasked) sequences
+        """
+        return self.order['mask'].sum()
+
+
+    def accepted(self):
+        """
+        :return: the list surrogate ids for currently accepted sequences
+        """
+        return np.where(self.order['mask'])[0]
+
+
+    def lengths(self, exclude_masked=False):
+        # type: (bool) -> np.ndarray
+        """
+        Sequence lengths
+
+        :param exclude_masked: True include only umasked sequencces
+        :return: the lengths of sequences
+        """
+        if exclude_masked:
+            return self.order['length'][self.order['mask']]
+        else:
+            return self.order['length']
+
+
+class ContactMatrix:
+
+    def __init__(self, bam_file, enzymes, seq_file, path ,metacc_folder, bin3c_folder, min_insert, bin_size, min_mapq_metacc, min_len_metacc, min_match_metacc,min_signal_metacc,min_mapq_bin3c ,min_len_bin3c,min_match_bin3c,min_signal_bin3c):
+
+        ########input the parameter################
+        ########################################################################
+        ########################################################################
+        #bam_file: alignment info of Hi-C library on contigs in bam#
+        #enzymes: name of restriction enzymes used in Hi-C experiments#
+        #seq_file: store the assembly contigs in fasta#
+        #path: output path#
+        #min_mapq_metacc: minimal mapping quality(default 30)#
+        #min_len_metacc: minimal length of contigs(default 1000bp)
+        #min_match_metacc: minimal match in cigar string (default 30)
+        #min_signal_metacc : minimal cross contig signal (default 2)
+        
+        
+        #min_mapq_bin3c = default 60
+        #min_len_bin3c = default 1000
+        #min_match_bin3c = default 10
+        #min_signal_bin3c = default 5
+        
+        
         self.bam_file = bam_file
         self.enzymes = enzymes
         self.seq_file = seq_file
         self.path = path
-        self.min_mapq_user = min_mapq
-        self.min_len = min_len
-        self.min_match_user = min_match
-        self.min_signal = min_signal
+        self.metacc_folder = metacc_folder
+        self.bin3c_folder = bin3c_folder
+        
+        
+        '''
+        metacc parameters
+        '''
+        
+        self.min_mapq_metacc = min_mapq_metacc
+        self.min_len_metacc = min_len_metacc
+        self.min_match_metacc = min_match_metacc
+        self.min_signal_metacc = min_signal_metacc
+        
+        '''
+        bin3c parameters
+        '''
+        
+        self.min_mapq_bin3c = min_mapq_bin3c
+        self.min_len_bin3c = min_len_bin3c
+        self.min_match_bin3c = min_match_bin3c
+        self.min_signal_bin3c = min_signal_bin3c
+        self.order = None
+        self.grouping = None 
+        
+        #fasta_info store the info from fasta file#
+        #seq_info store the information of contigs from bam file#
+        #seq_map store the contact map#
         self.fasta_info = {}
-        self.seq_info = []
+        
+        '''
+        metacc and bin3c have their own seq_info and seq_map
+        '''
+        self.seq_info_metacc = []
+        self.seq_info_bin3c = []
+        self.seq_map_metacc = None
+        self.seq_map_bin3c = None
+        
+        '''
+        primary_acceptance_mask is only for bin3c
+        '''
+        
+        self.primary_acceptance_mask = None
+        
+        self.processed_map = None
         self.total_reads = None
-        self.coverage_file = coverage_file
+        #the following min_insert and bin_size are only used by bin3C
+        self.min_insert = min_insert
+        self.bin_size = bin_size
 
-        # Parameters for metacc and bin3C
-        self.min_mapq_metacc = 30
-        self.min_match_metacc = 30
-        self.min_mapq_bin3c = 60
-        self.min_match_bin3c = 10
-
-        # Ensure output directories exist
-        os.makedirs(os.path.join(self.path, 'tmp'), exist_ok=True)
-
+        
         logger.info('Reading fasta file...')
         with open_input(seq_file) as multi_fasta:
-            # Prepare the site counter for the given experimental conditions
-            site_counter = SiteCounter(enzymes, is_linear=True)
-            # Get an estimate of sequences for progress
+            # prepare the site counter for the given experimental conditions
+            # fasta_info is a dictionary of preparation of seq_info and seq_info is the true results
+            site_counter = SiteCounter(enzymes,  is_linear=True)
+            # get an estimate of sequences for progress
             fasta_count = count_fasta_sequences(seq_file)
-            for seqrec in tqdm.tqdm(SeqIO.parse(multi_fasta, 'fasta'), total=fasta_count, desc='Analyzing contigs in reference fasta'):
-                if len(seqrec) < self.min_len:
+            for seqrec in tqdm.tqdm(SeqIO.parse(multi_fasta, 'fasta'), total=fasta_count , desc='Analyzing contigs in reference fasta'):
+                
+                if len(seqrec) < min(min_len_metacc, min_len_bin3c):
                     continue
                 self.fasta_info[seqrec.id] = {'sites': site_counter.count_sites(seqrec.seq),
-                                              'length': len(seqrec)}
+                                         'length': len(seqrec)}
 
         logger.debug('There are {} contigs in reference fasta'.format(fasta_count))
 
-        # Now parse the header information from bam file
+        
+        # now parse the header information from bam file
+        ###########input the bam data###############
+        #########seq_info contain the global contig information and we don't change the seq_info after being created##############
         with pysam.AlignmentFile(bam_file, 'rb') as bam:
+        ##test that BAM file is the correct sort order
             if 'SO' not in bam.header['HD'] or bam.header['HD']['SO'] != 'queryname':
                 raise IOError('BAM file must be sorted by read name')
 
-            logger.info('Filtering contigs by minimal length({})...'.format(self.min_len))
-            ref_count = {'seq_missing': 0, 'too_short': 0}
-            offset = 0
-            localid = 0
-
+            # determine the set of active sequences
+            # where the first filtration step is by length
+            logger.info('Filtering metacc contigs by minimal length({})...'.format(self.min_len_metacc))
+            logger.info('Filtering bin3c contigs by minimal length({})...'.format(self.min_len_bin3c))
+            ref_count = {'seq_missing_metacc': 0, 'too_short_metacc': 0,'seq_missing_bin3c': 0, 'too_short_bin3c': 0}
+            offset_metacc = 0
+            localid_metacc = 0
+            offset_bin3c = 0
+            localid_bin3c = 0
+            
             for n, (rname, rlen) in enumerate(zip(bam.references, bam.lengths)):
-                if rlen < self.min_len:
-                    ref_count['too_short'] += 1
-                    continue
-
+            # minimum length threshold
+              if rlen >= min_len_metacc:
+                
                 try:
                     fa = self.fasta_info[rname]
+                    signal = 0
+                    assert fa['length'] == rlen, 'Sequence lengths in {} do not agree: bam {} fasta {}'.format(rname, fa['length'], rlen)
+                    self.seq_info_metacc.append(SeqInfo_metacc(localid_metacc, n, rname, fa['sites'], rlen, 0, signal))
+
+                    localid_metacc = localid_metacc + 1
+                    offset_metacc += rlen
                 except KeyError:
                     logger.info('Contig "{}" was not present in reference fasta'.format(rname))
-                    ref_count['seq_missing'] += 1
-                    continue
+                    ref_count['seq_missing_metacc'] += 1
+                    
+                 ######initially set the covcc coverage to be zero
+                
+              else:
+                
+                ref_count['too_short_metacc'] += 1
+                
+                
+              if rlen >= min_len_bin3c:
+                try:
+                    fa = self.fasta_info[rname]
+                    assert fa['length'] == rlen, 'Sequence lengths in {} do not agree: bam {} fasta {}'.format(rname, fa['length'], rlen)
+                    
+                    
+                    self.seq_info_bin3c.append(SeqInfo_bin3c(offset_bin3c, n, rname, rlen, fa['sites']))
+                    ######initially set the covcc coverage to be zero
+                
+                    
+                    localid_bin3c = localid_bin3c + 1
+                    offset_bin3c += rlen
+                except KeyError:
+                    logger.info('Contig "{}" was not present in reference fasta'.format(rname))
+                    ref_count['seq_missing_bin3c'] += 1
+                           
+              else:
+                
+                ref_count['too_short_bin3c'] += 1
+                
+                
+              
 
-                assert fa['length'] == rlen, 'Sequence lengths in {} do not agree: bam {} fasta {}'.format(rname, fa['length'], rlen)
-
-                self.seq_info.append(SeqInfo(localid, n, rname, fa['sites'], rlen, 0))  # Initially set the covcc coverage to be zero
-                localid += 1
-                offset += rlen
-
-            self.total_len = offset
-            self.total_seq = localid
+            ####### total length of contigs##########
+            ####### total_seq is number of contigs###
+            self.total_len_metacc = offset_metacc
+            self.total_seq_metacc = localid_metacc
+            
+            self.total_len_bin3c = offset_bin3c
+            self.total_seq_bin3c = localid_bin3c
+            
 
             del self.fasta_info
 
-            if self.total_seq == 0:
-                raise ImportError('No sequences in BAM file can be found in FASTA file')
-
-            logger.debug('{} contigs missing and {} contigs are too short'.format(ref_count['seq_missing'], ref_count['too_short']))
-            logger.debug('Accepted {} contigs covering {} bp'.format(self.total_seq, self.total_len))
+            if self.total_seq_metacc == 0:
+                raise ImportError('No sequences in BAM file can be found in FASTA file for MetaCC')
+            
+            if self.total_seq_bin3c == 0:
+                raise ImportError('No sequences in BAM file can be found in FASTA file for bin3C')
+            
+            logger.debug('{} contigs miss and {} contigs are too short for metacc'.format(ref_count['seq_missing_metacc'] , ref_count['too_short_metacc']))
+            logger.debug('{} contigs miss and {} contigs are too short for bin3c'.format(ref_count['seq_missing_bin3c'] , ref_count['too_short_bin3c']))
+            
+            logger.debug('Accepted {} contigs covering {} bp for metacc'.format(self.total_seq_metacc, self.total_len_metacc))
+            logger.debug('Accepted {} contigs covering {} bp for bin3c'.format(self.total_seq_bin3c, self.total_len_bin3c))
             logger.info('Counting reads in bam file...')
 
+ 
             self.total_reads = bam.count(until_eof=True)
             logger.debug('BAM file contains {0} alignments'.format(self.total_reads))
+            
+            # initialise the order
+            self.order = SeqOrder(self.seq_info_bin3c)
 
             logger.info('Handling the alignments...')
             self._bin_map(bam)
+            
+            '''
+            The primary_acceptance_mask is used by bin3c to do filtering
+            '''
+            self.set_primary_acceptance_mask()
+                
+        
+        
+        
+        
+        '''  
+        
+        following block is for metacc
+        '''
+        logger.info('Filtering contigs according to minimal signal of metacc({})...'.format(self.min_signal_metacc))
+        contig_id = self.metacc_max_offdiag()
+        logger.debug('{} contigs remain for metacc'.format(len(contig_id)))
+        
+        self.seq_map_metacc = self.seq_map_metacc.tolil()
+        seq_temp_metacc = [] ###temporately store the sequence information#######
+        
+        for i , idn in enumerate(contig_id):
+            seq = self.seq_info_metacc[idn]
+            assert seq.localid_metacc == idn, 'the local index does not match the contact matrix index for metacc'
+            seq_temp_metacc.append(SeqInfo_metacc(i, seq.refid, seq.name, seq.sites, seq.length, self.seq_map_metacc[idn, idn], signal))
 
-        # Write contig_info.csv
-        self.write_contig_info()
-        self.save_contact_matrices()
 
+        self.seq_info_metacc = seq_temp_metacc
+        del seq_temp_metacc
+
+        self.seq_map_metacc = self.seq_map_metacc.tocsr()
+        self.seq_map_metacc = self.seq_map_metacc[contig_id , :]
+        self.seq_map_metacc = self.seq_map_metacc.tocsc()
+        self.seq_map_metacc = self.seq_map_metacc[: , contig_id]
+        self.seq_map_metacc = self.seq_map_metacc.tocoo()
+        del contig_id
+        
+        assert self.seq_map_metacc.shape[0] == len(self.seq_info_metacc), 'Filter error for metacc'
+        
+        ########change the diaganol entries of Hi-C matrix to zero#######
+        self.seq_map_metacc = self.seq_map_metacc.tolil()
+        self.seq_map_metacc.setdiag(0)
+        
+        #######Compute the Hi-C signals for each contig########
+        self.seq_map_metacc = self.seq_map_metacc.tocsr()
+        self.row_sum = np.matrix.tolist(self.seq_map_metacc.sum(axis=0))[0]
+        self._write_contig_info_metacc()
+        
+        
+        # create an initial acceptance mask
+        
+            
+            
+            
+        
     def _bin_map(self, bam):
+        """
+        Accumulate read-pair observations from the supplied BAM file.
+        Maps are initialized here. Logical control is achieved through initialisation of the
+        ContactMap instance, rather than supplying this function arguments.
+
+        :param bam: this instance's open bam file.
+        """
         import tqdm
 
-        def _matcher_user(r):
-            if self.min_match_user > 0:
-                return r.mapping_quality >= self.min_mapq_user and r.cigarstring is not None and r.cigartuples[0][0] == 0 and r.cigartuples[0][1] >= self.min_match_user
-            else:
-                return r.mapping_quality >= self.min_mapq_user
+        def _simple_match_metacc(r):
+            return r.mapping_quality >= _mapq_metacc
 
-        def _matcher_metacc(r):
-            if self.min_match_metacc > 0:
-                return r.mapping_quality >= self.min_mapq_metacc and r.cigarstring is not None and r.cigartuples[0][0] == 0 and r.cigartuples[0][1] >= self.min_match_metacc
-            else:
-                return r.mapping_quality >= self.min_mapq_metacc
+        def _strong_match_metacc(r):
+            if r.mapping_quality < _mapq_metacc or r.cigarstring is None:
+                return False
+            cig = r.cigartuples[-1] if r.is_reverse else r.cigartuples[0]
+            return cig[0] == 0 and cig[1] >= self.min_match_metacc
 
-        def _matcher_bin3c(r):
-            return True  # Accept all alignments
+        # set-up match call
+        _matcher_metacc = _strong_match_metacc if self.min_match_metacc else _simple_match_metacc
+        
+        def _simple_match_bin3c(r):
+            return r.mapping_quality >= _mapq_bin3c
+
+        def _strong_match_bin3c(r):
+            if r.mapping_quality < _mapq_bin3c or r.cigarstring is None:
+                return False
+            cig = r.cigartuples[-1] if r.is_reverse else r.cigartuples[0]
+            return cig[0] == 0 and cig[1] >= self.min_match_bin3c
+
+        # set-up match call
+        _matcher_bin3c = _strong_match_bin3c if self.min_match_bin3c else _simple_match_bin3c
 
         def next_informative(_bam_iter, _pbar):
             while True:
@@ -205,155 +688,751 @@ class ContactMatrix:
                 _pbar.update()
                 if not r.is_unmapped and not r.is_secondary and not r.is_supplementary:
                     return r
-
-        _seq_map_user = Sparse2DAccumulator(self.total_seq)
-        _seq_map_metacc = Sparse2DAccumulator(self.total_seq)
-        _seq_map_bin3c = Sparse2DAccumulator(self.total_seq)
+       
+        _seq_map_metacc = Sparse2DAccumulator(self.total_seq_metacc)
+        _seq_map_bin3c = Sparse2DAccumulator(self.total_seq_bin3c)
+        
 
         with tqdm.tqdm(total=self.total_reads) as pbar:
-            _idx = self.make_reverse_index('refid')
+
+            # locals for read filtering
+            _mapq_metacc = self.min_mapq_metacc
+            _mapq_bin3c = self.min_mapq_bin3c
+
+            _idx_metacc, _idx_bin3c = self.make_reverse_index('refid') #from global index to local index#
+            _len = bam.lengths
+     
+            counts_metacc = OrderedDict({
+                'accepted map_different_contig pairs for metacc': 0,
+                'accepted map_same_contig pairs for metacc': 0,
+                'ref_excluded pairs for metacc': 0,
+                'poor_match pairs for metacc': 0,
+                'single read for metacc':0})
+            
+            counts_bin3c = OrderedDict({
+                'accepted map_different_contig pairs for bin3c': 0,
+                'accepted map_same_contig pairs for bin3c': 0,
+                'ref_excluded pairs for bin3c': 0,
+                'poor_match pairs for bin3c': 0,
+                'single read for bin3c':0})
+
             bam.reset()
             bam_iter = bam.fetch(until_eof=True)
-
-            counts = OrderedDict({
-                'accepted map_different_contig pairs': 0,
-                'accepted map_same_contig pairs': 0,
-                'ref_excluded pairs': 0,
-                'poor_match pairs': 0,
-                'single read': 0
-            })
-
+            self.index1 = 0
             while True:
+                self.index1 += 1
                 try:
                     r1 = next_informative(bam_iter, pbar)
                     while True:
+                        # read records until we get a pair
                         r2 = next_informative(bam_iter, pbar)
                         if r1.query_name == r2.query_name:
                             break
-                        r1 = r2
-                        counts['single read'] += 1
+                        r1 = r2 ###if we don't get a pair, next _bam_iter
+                        counts_metacc['single read for metacc'] += 1
+                        counts_bin3c['single read for bin3c'] += 1
+                        
                 except StopIteration:
                     break
 
-                if r1.reference_id not in _idx or r2.reference_id not in _idx:
-                    counts['ref_excluded pairs'] += 1
-                    continue
-
-                ix1 = _idx[r1.reference_id]
-                ix2 = _idx[r2.reference_id]
-
-                if ix2 < ix1:
-                    ix1, ix2 = ix2, ix1
-
-                ix = (ix1, ix2)
-
-                # User-determined
-                if _matcher_user(r1) and _matcher_user(r2):
-                    if _seq_map_user.getitem(ix):
-                        _seq_map_user.setitem(ix, _seq_map_user.getitem(ix) + 1)
+                if r1.reference_id in _idx_metacc and r2.reference_id in _idx_metacc:
+                    if _matcher_metacc(r1) and _matcher_metacc(r2):
+                        if r1.reference_id == r2.reference_id:
+                            counts_metacc['accepted map_same_contig pairs for metacc'] += 1
+                        else:
+                            counts_metacc['accepted map_different_contig pairs for metacc'] += 1
+                            
+                        ix1_metacc = _idx_metacc[r1.reference_id]
+                        ix2_metacc = _idx_metacc[r2.reference_id]
+    
+                        # maintain just a half-matrix
+                        if ix2_metacc < ix1_metacc:
+                            ix1_metacc, ix2_metacc = ix2_metacc, ix1_metacc
+    
+                        ix_metacc = (ix1_metacc , ix2_metacc)
+                        if _seq_map_metacc.getitem(ix_metacc):
+                            temp_value = _seq_map_metacc.getitem(ix_metacc) + 1
+                            _seq_map_metacc.setitem(ix_metacc , temp_value)
+                        else:
+                            _seq_map_metacc.setitem(ix_metacc , 1)
+                    
                     else:
-                        _seq_map_user.setitem(ix, 1)
-
-                # MetaCC
-                if _matcher_metacc(r1) and _matcher_metacc(r2):
-                    if _seq_map_metacc.getitem(ix):
-                        _seq_map_metacc.setitem(ix, _seq_map_metacc.getitem(ix) + 1)
+                        counts_metacc['poor_match pairs for metacc'] += 1
+                else:
+                    counts_metacc['ref_excluded pairs for metacc'] += 1
+                
+                
+                
+                if r1.reference_id in _idx_bin3c and r2.reference_id in _idx_bin3c:
+                    if _matcher_bin3c(r1)and _matcher_bin3c(r2):
+                        if r1.reference_id == r2.reference_id:
+                            counts_bin3c['accepted map_same_contig pairs for bin3c'] += 1
+                        else:
+                            counts_bin3c['accepted map_different_contig pairs for bin3c'] += 1
+                        ix1_bin3c = _idx_bin3c[r1.reference_id]
+                        ix2_bin3c = _idx_bin3c[r2.reference_id]
+    
+                        # maintain just a half-matrix
+                        if ix2_bin3c < ix1_bin3c:
+                            ix1_bin3c, ix2_bin3c = ix2_bin3c, ix1_bin3c
+    
+                        ix_bin3c = (ix1_bin3c , ix2_bin3c)
+                        if _seq_map_bin3c.getitem(ix_bin3c):
+                            temp_value = _seq_map_bin3c.getitem(ix_bin3c) + 1
+                            _seq_map_bin3c.setitem(ix_bin3c , temp_value)
+                        else:
+                            _seq_map_bin3c.setitem(ix_bin3c , 1)
                     else:
-                        _seq_map_metacc.setitem(ix, 1)
+                        counts_bin3c['poor_match pairs for bin3c'] += 1
+                    
+                else:
+                  counts_bin3c['ref_excluded pairs for bin3c'] += 1
+                  
 
-                # Bin3C
-                if _matcher_bin3c(r1) and _matcher_bin3c(r2):
-                    if _seq_map_bin3c.getitem(ix):
-                        _seq_map_bin3c.setitem(ix, _seq_map_bin3c.getitem(ix) + 1)
-                    else:
-                        _seq_map_bin3c.setitem(ix, 1)
+                
+        self.seq_map_metacc = _seq_map_metacc.get_coo()
+        self.seq_map_bin3c = _seq_map_bin3c.get_coo()
+        
+        del _seq_map_metacc, _seq_map_bin3c, r1, r2, _idx_metacc, _idx_bin3c
 
-            self.seq_map_user = _seq_map_user.get_coo()
-            self.seq_map_metacc = _seq_map_metacc.get_coo()
-            self.seq_map_bin3c = _seq_map_bin3c.get_coo()
+        logger.debug('Pair accounting for metacc: {}'.format(counts_metacc))
+        logger.debug('Pair accounting for bin3c: {}'.format(counts_bin3c))
 
-            logger.debug('Pair accounting: {}'.format(counts))
 
     def make_reverse_index(self, field_name):
-        rev_idx = {}
-        for n, seq in enumerate(self.seq_info):
+        """
+        Make a reverse look-up (dict) from the chosen field in seq_info_metacc and seq_Info_bin3c to the internal index value
+        of the given sequence. Non-unique fields will raise an exception.
+
+        :param field_name: the seq_info field to use as the reverse.
+        :return: internal array index of the sequence
+        """
+        rev_idx_metacc = {}
+        rev_idx_bin3c = {}
+        for n, seq in enumerate(self.seq_info_metacc):
             fv = getattr(seq, field_name)
-            if fv in rev_idx:
-                raise RuntimeError('Field contains non-unique entries, a 1-1 mapping cannot be made')
-            rev_idx[fv] = n
-        return rev_idx
+            if fv in rev_idx_metacc:
+                raise RuntimeError('field contains non-unique entries, a 1-1 mapping cannot be made for metacc')
+            rev_idx_metacc[fv] = n
+        
+        for n, seq in enumerate(self.seq_info_bin3c):
+            fv = getattr(seq, field_name)
+            if fv in rev_idx_bin3c:
+                raise RuntimeError('field contains non-unique entries, a 1-1 mapping cannot be made for bin3c')
+            rev_idx_bin3c[fv] = n
+        return rev_idx_metacc, rev_idx_bin3c
 
-    def write_contig_info(self):
-        contig_info_file = os.path.join(self.path, 'contig_info.csv')
-        coverage_dict = {}
 
-        if self.coverage_file and os.path.exists(self.coverage_file):
-            logger.info(f'Coverage file found at {self.coverage_file}. Including coverage information in contig_info.csv.')
-            with open(self.coverage_file, 'r') as f:
-                for line in f:
-                    parts = line.strip().split()
-                    if len(parts) != 2:
-                        continue
-                    contig_name, coverage = parts
-                    coverage_dict[contig_name] = float(coverage)
-            has_coverage = True
+    def _write_contig_info_metacc(self):
+        with open(os.path.join(self.metacc_folder, 'tmp', 'contig_info.csv'), 'w') as out:
+            out.write("name,sites,length,covcc,signal\n")
+            for i, seq in enumerate(self.seq_info_metacc):
+                signal = self.row_sum[i]
+                logging.debug(f"Writing contig: {seq.name}, Sites: {seq.sites}, Length: {seq.length}, Signal: {signal}")
+                
+                # Check if the signal is zero
+                if signal == 0:
+                    logging.warning(f"Contig {seq.name} has zero signal.")
+                    
+                out.write(f"{seq.name},{seq.sites},{seq.length},{seq.covcc},{signal}\n")
+
+
+        
+        # Write the simplified contig information
+        with open(os.path.join(self.metacc_folder, 'contig_info.csv'), 'w') as out:
+            out.write("name,sites,length\n")
+            # out.write('Contig name,Number of restriction sites,Contig length\n')
+            for seq in self.seq_info_metacc:
+                out.write(f"{seq.name},{seq.sites},{seq.length}\n")
+
+            
+        
+    def metacc_max_offdiag(self):
+        """
+        Determine the maximum off-diagonal values of a given symmetric matrix. As this
+        is assumed to be symmetric, we consider only the rows.
+
+        :param _m: a scipy.sparse matrix
+        :return: the off-diagonal maximum values
+        """
+        _m = self.seq_map_metacc
+        assert scisp.isspmatrix(_m), 'Input matrix is not a scipy.sparse object'
+        _m = _m.tolil(True)
+        _diag = _m.tocsr().diagonal()
+        _m.setdiag(0)
+        _sig = np.asarray(_m.tocsr().max(axis=0).todense()).ravel()
+        _contig_id = []
+        for i in range(_m.shape[0]):
+            if _sig[i] >= self.min_signal_metacc and _diag[i]>0 and self.seq_info_metacc[i].sites>0:
+                _contig_id.append(i)
+        del _m
+        return _contig_id
+    
+    def get_primary_acceptance_mask(self):
+        assert self.primary_acceptance_mask is not None, 'Primary acceptance mask has not be initialized'
+        return self.primary_acceptance_mask.copy()
+
+    def set_primary_acceptance_mask(self, min_len=None, min_sig=None, max_fold=None, update=False):
+        """
+        Determine and set the filter mask using the specified constraints across the entire
+        contact map. The mask is True when a sequence is considered acceptable wrt to the
+        constraints. The mask is also returned by the function for convenience.
+
+        :param min_len: override instance value for minimum sequence length
+        :param min_sig: override instance value for minimum off-diagonal signal (counts)
+        :param max_fold: maximum locally-measured fold-coverage to permit
+        :param update: replace the current primary mask if it exists
+        :return: an acceptance mask over the entire contact map
+        """
+        assert max_fold is None, 'Filtering on max_fold is currently disabled'
+
+        # If parameter based critiera were unset, use instance member values set at instantiation time
+        if not min_len:
+            min_len = self.min_len_bin3c
+        if not min_sig:
+            min_sig = self.min_signal_bin3c
+
+        assert min_len, 'Filtering criteria min_len is None for bin3c'
+        assert min_sig, 'Filtering criteria min_sig is None for bin3c'
+
+        logger.debug('Setting primary acceptance mask with '
+                     'filtering criterion min_len: {} min_sig: {} for bin3c'.format(min_len, min_sig))
+
+        # simply return the current mask if it has already been determined
+        # and an update is not requested
+        if not update and self.primary_acceptance_mask is not None:
+            logger.debug('Using existing mask')
+            return self.get_primary_acceptance_mask()
+
+        acceptance_mask = np.ones(self.total_seq_bin3c, dtype=bool)
+
+        # mask for sequences shorter than limit
+        _mask = self.order.lengths() >= min_len
+        logger.debug('Minimum length threshold removing for bin3c: {}'.format(self.total_seq_bin3c - _mask.sum()))
+        acceptance_mask &= _mask
+
+        # mask for sequences weaker than limit
+        
+        
+        signal = sparse_utils.max_offdiag(self.seq_map_bin3c)
+        _mask = signal >= min_sig
+        logger.debug('Minimum signal threshold removing for bin3c: {}'.format(self.total_seq_bin3c - _mask.sum()))
+        acceptance_mask &= _mask
+
+        # retain the union of all masks.
+        self.primary_acceptance_mask = acceptance_mask
+
+        logger.debug('Accepted sequences for bin3c: {}'.format(self.primary_acceptance_mask.sum()))
+
+        return self.get_primary_acceptance_mask()
+
+    def prepare_seq_map(self, norm=True, bisto=True, mean_type='geometric'):
+        """
+        Prepare the sequence map (seq_map_bin3c) by application of various filters and normalisations.
+
+        :param norm: normalisation by sequence lengths
+        :param bisto: make the output matrix bistochastic
+        :param mean_type: when performing normalisation, use "geometric, harmonic or arithmetic" mean.
+        """
+
+        logger.info('Preparing sequence map for bin3c with full dimensions: {}'.format(self.seq_map_bin3c.shape))
+
+        _mask = self.get_primary_acceptance_mask()
+
+        self.order.set_mask_only(_mask)
+
+        if self.order.count_accepted() < 1:
+            raise NoneAcceptedException()
+
+        _map = self.seq_map_bin3c.astype(float)
+
+        # apply length normalisation if requested
+        if norm:
+            _map = self._norm_seq(_map, mean_type=mean_type, use_sites=True)
+            logger.debug('Map normalized')
+
+        # make map bistochastic if requested
+        if bisto:
+            # TODO balancing may be better done after compression
+            _map, scl = self._bisto_seq(_map)
+            # retain the scale factors
+            self.bisto_scale = scl
+            logger.debug('Map balanced')
+
+        # cache the results for optional quick access
+        self.processed_map = _map
+
+    def get_subspace(self, permute=False, external_mask=None, marginalise=False, flatten=True,
+                     dtype=float):
+        """
+        Using an already normalized full seq_map, return a subspace as indicated by an external
+        mask or if none is supplied, the full map without filtered elements.
+
+        The supplied external mask must refer to all sequences in the map.
+
+        :param permute: reorder the map with the current ordering state
+        :param external_mask: an external mask to combine with the existing primary mask
+        :param marginalise: Assuming 4D NxNx2x2 tensor, sum 2x2 elements to become a 2D NxN
+        :param flatten: convert a NxNx2x2 tensor to a 2Nx2N matrix
+        :param dtype: return map with specific element type
+        :return: subspace map
+        """
+        assert (not marginalise and not flatten) or np.logical_xor(marginalise, flatten), \
+            'marginalise and flatten are mutually exclusive'
+
+        # starting with the normalized map
+        _map = self.processed_map.astype(dtype)
+
+        # from a union of the sequence filter and external mask
+        if external_mask is not None:
+            _mask = self.get_primary_acceptance_mask()
+            logger.info('Beginning with sequences after primary filtering: {}'.format(_mask.sum()))
+            _mask &= external_mask
+            logger.info('Active sequences after applying external mask: {}'.format(_mask.sum()))
+            self.order.set_mask_only(_mask)
+
+        # remove masked sequences from the map
+        if self.order.count_accepted() < self.total_seq_bin3c:
+            
+            _map = sparse_utils.compress(_map.tocoo(), self.order.mask_vector())
+            logger.info('After removing filtered sequences map dimensions: {}'.format(_map.shape))
+
+
+        if permute:
+            _map = self._reorder_seq(_map, flatten=flatten)
+            logger.debug('Map reordered')
+
+        return _map
+    
+    def _reorder_seq(self, _map, flatten=False):
+        """
+        Reorder a simple sequence map using the supplied map.
+
+        :param _map: the map to reorder
+        
+        :return: ordered map
+        """
+        assert sp.isspmatrix(_map), 'reordering expects a sparse matrix type'
+
+        _order = self.order.gapless_positions()
+        
+
+        assert _map.shape[0] == _order.shape[0], 'supplied map and unmasked order are different sizes'
+        p = sp.lil_matrix(_map.shape)
+        for i in range(len(_order)):
+            p[i, _order[i]] = 1.
+        p = p.tocsr()
+        return p.dot(_map.tocsr()).dot(p.T)
+
+    def _bisto_seq(self, _map):
+        """
+        Make a contact map bistochastic. This is another form of normslisation. Automatically
+        handles 2D and 4D maps.
+
+        :param _map: a map to balance (make bistochastic)
+        :return: the balanced map
+        """
+        logger.debug('Balancing contact map')
+
+        
+        _map, scl = sparse_utils.kr_biostochastic(_map)
+        return _map, scl
+
+    def _get_sites(self):
+        _sites = np.array([si.sites for si in self.seq_info_bin3c], dtype=float)
+        # all sequences are assumed to have a minimum of 1 site -- even if not observed
+        # TODO test whether it would be more accurate to assume that all sequences are under counted by 1.
+        _sites[np.where(_sites == 0)] = 1
+        return _sites
+
+    def _norm_seq(self, _map, use_sites=True, mean_type='geometric'):
+        """
+        Normalise a simple sequence map in place by the geometric mean of interacting contig pairs lengths.
+        The map is assumed to be in starting order.
+
+        :param _map: the target map to apply normalisation
+        :param use_sites: normalise matrix counts using observed sites, otherwise normalise
+        using sequence lengths as a proxy
+        :param mean_type: for length normalisation, choice of mean (harmonic, geometric, arithmetic)
+        :return: normalized map
+        """
+        if use_sites:
+            logger.debug('Doing site based normalisation')
+            _sites = self._get_sites()
+            _map = _map.astype(float)
+            fast_norm_fullseq_bysite(_map.row, _map.col, _map.data, _sites)
+
         else:
-            logger.info('Coverage file not provided or not found. Skipping coverage information in contig_info.csv.')
-            has_coverage = False
+            logger.debug('Doing length based normalisation')
+        
+            _mean_func = mean_selector(mean_type)
+            _len = self.order.lengths().astype(float)
+            _map = _map.tolil().astype(float)
+            for i in range(_map.shape[0]):
+                _map[i, :] /= np.fromiter((1e-3 * _mean_func(_len[i],  _len[j])
+                                           for j in range(_map.shape[0])), dtype=float)
+            _map = _map.tocsr()
 
-        # Write contig_info.csv
-        with open(contig_info_file, 'w') as f:
-            f.write('name,sites,length,covcc\n')
-            for seq in self.seq_info:
-                if has_coverage:
-                    coverage = coverage_dict.get(seq.name, 0.0)
-                    f.write(f'{seq.name},{seq.sites},{seq.length},{coverage}\n')
-                else:
-                    f.write(f'{seq.name},{seq.sites},{seq.length}\n')
-
-        logger.info(f'contig_info.csv saved to {contig_info_file}')
+        return _map
+    
+    def get_fields():
+        """
+        :return: the list of fields used in seq_info dict.
+        """
+        return SeqInfo_bin3c._fields
 
 
+    def map_weight(self):
+        """
+        :return: the total map weight (sum ij)
+        """
+        return self.seq_map_bin3c.sum()
 
-    def save_contact_matrices(self):
-        # Save the contact matrices as .npz files
-        from scipy.sparse import save_npz
+    def is_empty(self):
+        """
+        :return: True if the map has zero weight
+        """
+        return self.map_weight() == 0
 
-        matrices = {
-            'user': self.seq_map_user,
-            'metacc': self.seq_map_metacc,
-            'bin3c': self.seq_map_bin3c
-        }
 
-        for key, matrix in matrices.items():
-            matrix_file = os.path.join(self.path, f'contact_matrix_{key}.npz')
-            save_npz(matrix_file, matrix)
-            logger.info(f'Contact matrix "{key}" saved to {matrix_file}')
 
-def main():
-    parser = argparse.ArgumentParser(description="Generate raw contact matrix and contig info.")
-    parser.add_argument('--bam', required=True, help='Path to the BAM file containing Hi-C reads')
-    parser.add_argument('--fasta', required=True, help='Path to the FASTA file containing contig sequences')
-    parser.add_argument('--out', required=True, help='Output directory to save the contact matrix and contig info')
-    parser.add_argument('--enzymes', nargs='+', required=False, default=['HindIII'], help='List of enzymes')
-    parser.add_argument('--min_mapq', type=int, default=30, help='Minimum MAPQ for user-determined method')
-    parser.add_argument('--min_len', type=int, default=1000, help='Minimum contig length')
-    parser.add_argument('--min_match', type=int, default=30, help='Minimum match length for user-determined method')
-    parser.add_argument('--coverage', required=False, help='Path to the coverage.txt file')
-    args = parser.parse_args()
+    
+    
+    
+        '''
+libraries for metacc
+'''
+# from scripts.raw_contact_both import ContactMatrix
+from MetaCC.Script.normalized_contact import NormCCMap
+from MetaCC.Script.utils import load_object, save_object, make_dir, gen_bins, gen_sub_bins, make_random_seed
+from MetaCC.Script.normcc import normcc
+import scipy.sparse as scisp
+import argparse
+import warnings
+import logging
+import shutil
+import sys
+import os
 
-    # Create ContactMatrix instance and process data
+
+#######Import python packages
+import argparse
+import warnings
+import logging
+import shutil
+import sys
+import os
+import fileinput
+
+##Ignore the warning information of package deprecation##
+warnings.filterwarnings("ignore")
+
+__version__ = '1.0.0, released at 10/2024'
+
+def replace_in_file(file_path):
+    with fileinput.input(file_path, inplace=True) as file:
+        for line in file:
+            if ">" and ":"  in line:
+              new_line = line.split(' ')[1].split(':')[1]
+              print(">"+new_line)
+            else:
+              print(line,end="")
+
+if __name__ == '__main__':
+    
+    
+    
+    def mk_version():
+        return 'Metahit v{}'.format(__version__)
+
+    def out_name(base, suffix):
+        return '{}{}'.format(base, suffix)
+
+    def ifelse(arg, default):
+        if arg is None:
+            return default
+        else:
+            return arg
+    
+    
+    
+    script_directory = os.path.dirname(os.path.abspath(sys.argv[0]))
+
+    global_parser = argparse.ArgumentParser(add_help=False)
+    global_parser.add_argument('-V', '--version', default=False, action='store_true', help='Show the application version')
+    global_parser.add_argument('-v', '--verbose', default=False, action='store_true', help='Verbose output')
+    global_parser.add_argument('--cover', default=False, action='store_true', help='Cover existing files')
+    
+    
+    global_parser.add_argument('--FASTA', help='Reference fasta sequence')
+    global_parser.add_argument('--BAM', help='Input bam file in query order')
+    global_parser.add_argument('--OUTDIR', help='Output directory')
+    global_parser.add_argument('-e', '--enzyme', metavar='NEB_NAME', action='append',
+                           help='Case-sensitive enzyme name. Use multiple times for multiple enzymes')
+    
+    
+    global_parser.add_argument('--metacc-min-len', type=int,
+                           help='Minimum acceptable contig length [1000]')
+    global_parser.add_argument('--metacc-min-signal', type=int,
+                           help='Minimum acceptable Hi-C signal [2]')
+    global_parser.add_argument('--metacc-min-mapq', type=int,
+                           help='Minimum acceptable mapping quality [30]')
+    global_parser.add_argument('--metacc-min-match', type=int,
+                           help='Accepted alignments must being N matches [30]')
+    global_parser.add_argument('--thres', type=float,
+                           help='the fraction of discarded NormCC-normalized Hi-C contacts [0.05]')
+    global_parser.add_argument('--num-gene', type=int,
+                               help='Number of maker genes detected, automatically detected if not input')
+    
+    global_parser.add_argument('--seed', type=int, default=None,
+                               help='Random seed')
+    global_parser.add_argument('--metacc-min-binsize', type=int,
+                               help='Minimum bin size used in output [150000]')
+    
+    
+    
+    
+    global_parser.add_argument('--bin3c-min-len', type=int,
+                           help='Minimum acceptable contig length [1000]')
+    global_parser.add_argument('--bin3c-min-signal', type=int,
+                           help='Minimum acceptable Hi-C signal [2]')
+    global_parser.add_argument('--bin3c-min-mapq', type=int,
+                           help='Minimum acceptable mapping quality [30]')
+    global_parser.add_argument('--bin3c-min-match', type=int,
+                           help='Accepted alignments must being N matches [30]')
+    global_parser.add_argument('--bin3c-min-extent', type=int,
+                               help='Minimum cluster extent used in output [50000]')
+    
+    
+    global_parser.add_argument('--no-fasta', default=False, action='store_true',
+                             help='Do not generate cluster FASTA files')
+    
+    
+    global_parser.add_argument('--no-report', default=False, action='store_true',
+                             help='Do not generate a cluster report')
+    
+    global_parser.add_argument('--no-spades', default=False, action='store_true',
+                             help='Assembly was not done using SPAdes')
+    
+    global_parser.add_argument('--only-large', default=False, action='store_true',
+                             help='Only write FASTA for clusters longer than min_extent')
+    
+    
+    
+    
+    global_parser.add_argument('-t', '--threads', default=30, type=int, help="the number of threads. default is 30.")
+    
+    
+    
+    global_parser.add_argument('--gene-cov', type=float, help='gene coverage used in detecting marker genes, default 0.9')
+    global_parser.add_argument('--rwr-rp', type=float, help='random walk restart probability, default 0.5')
+    global_parser.add_argument('--rwr-thres', type=int, help='cut-off to maintain sparsity in each random walk step, default 80')
+    global_parser.add_argument('--max-markers', type=int, help='maximum number of contigs with marker genes, default 8000')
+    
+    global_parser.add_argument('--intra', type=int, help='percentile threshold to assign the contigs to preliminary bins in pre-clustering step, default 50')
+    global_parser.add_argument('--inter', type=int, help='percentile threshold to assign the contigs to new bins in pre-clustering step, default 0')
+    
+    global_parser.add_argument('--cont-weight', type=float, help='coefficient of completeness - cont_weight * completeness, default 2')
+    global_parser.add_argument('--min-comp', type=float, help='minimum completeness of bin to consider during bin selection process, default 50')
+    global_parser.add_argument('--max-cont' , type=float, help='maximum contamination of bin to consider during bin selection process, default 10')
+    global_parser.add_argument('--report-quality', type=float, help="minimum quality of bin to report, default 10")
+    global_parser.add_argument('--imputecc-min-binsize', type=int, help='Minimum bin size used in output [100000]')
+
+
+
+
+
+    args = global_parser.parse_args()
+
+    if args.version:
+        print(mk_version())
+        sys.exit(0)
+    
+    
+    output_dir = os.path.abspath(args.OUTDIR)
+
+    try:
+        make_dir(output_dir)
+    except IOError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    metacc_folder = output_dir
+    bin3c_folder = os.path.join(output_dir, 'bin3c')
+    imputecc_folder = os.path.join(output_dir, 'imputecc')
+
+    # Define metacc temp folder
+    metacc_temp_folder = os.path.join(output_dir, 'tmp')
+
+    # Ensure the temp folder exists
+    if not os.path.exists(metacc_temp_folder):
+        os.makedirs(metacc_temp_folder, exist_ok=True)
+
+    try:
+        make_dir(metacc_folder, exist_ok=True)
+        make_dir(bin3c_folder, exist_ok=True)
+        make_dir(imputecc_folder, exist_ok=True)
+    except IOError as e:
+        print(f"Error creating output directories: {e}")
+        sys.exit(1)
+
+    
+    
+    
+
+    
+    
+    # imputecc_temp_folder = os.path.join(imputecc_folder , 'tmp')
+    # if not os.path.exists(imputecc_temp_folder):
+    #     os.mkdir(imputecc_temp_folder)
+    # else:
+    #     shutil.rmtree(imputecc_temp_folder)           
+    #     os.mkdir(imputecc_temp_folder)
+    
+    
+    
+    # Create Intermediate folder
+    # Intermediate folder is not deleted
+    # interm_folder = os.path.join(imputecc_folder, 'intermediate')
+    # if not os.path.exists(interm_folder):
+    #     os.mkdir(interm_folder)
+        
+    
+        
+    
+           
+    logging.captureWarnings(True)
+    logger = logging.getLogger('main')
+
+    # root log listens to everything
+    root = logging.getLogger('')
+    root.setLevel(logging.DEBUG)
+
+    # log message format
+    formatter = logging.Formatter(fmt='%(levelname)-8s | %(asctime)s | %(name)7s | %(message)s')
+
+    # Runtime console listens to INFO by default
+    ch = logging.StreamHandler()
+    if args.verbose:
+        ch.setLevel(logging.DEBUG)
+    else:
+        ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    root.addHandler(ch)
+
+    # File log listens to all levels from root
+    log_path = os.path.join(args.OUTDIR, 'bin_refinement.log')
+    fh = logging.FileHandler(log_path, mode='a')
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+    root.addHandler(fh)
+
+    # Add some environmental details
+    logger.debug(mk_version())
+    logger.debug(sys.version.replace('\n', ' '))
+    logger.debug('Command line: {}'.format(' '.join(sys.argv)))
+    
+    
+    
+    
+    bin3c_runtime_defaults = {
+        'min_reflen': 1000,
+        'min_signal': 5,
+        'min_extent': 50000,
+        'min_mapq': 60,
+        'strong': 10
+    }
+    
+    metacc_runtime_defaults = {
+        'min_len': 1000,
+        'min_signal': 2,
+        'min_mapq': 30,
+        'min_match': 30,
+        'thres': 0.05,
+        'min_binsize':150000
+    }
+    
+    imputecc_runtime_defaults = {
+        'gene_cov': 0.9,
+        'rwr_rp': 0.5,
+        'rwr_thres': 80,
+        'max_markers': 8000,
+        'intra': 50,
+        'inter': 0,
+        'min_binsize':100000,
+        'cont_weight': 2,
+        'min_comp': 50.0,
+        'max_cont': 10.0,
+        'report_quality': 10.0
+    }
+    
+
+        
+    logger.info('Begin constructing raw contact matrix for metacc and bin3c...')
     cm = ContactMatrix(
-        bam_file=args.bam,
-        enzymes=args.enzymes,
-        seq_file=args.fasta,
-        path=args.out,
-        min_mapq=args.min_mapq,
-        min_len=args.min_len,
-        min_match=args.min_match,
-        coverage_file=args.coverage
-    )
+                    args.BAM,
+                    args.enzyme,
+                    args.FASTA,
+                    args.OUTDIR,
+                    metacc_folder,
+                    bin3c_folder,
+                    # min_insert and bin_size are used by bin3C
+                    min_insert = 0,
+                    bin_size=None,
+                    
+                    #parameters for metacc
+                    min_mapq_metacc=ifelse(args.metacc_min_mapq, metacc_runtime_defaults['min_mapq']),
+                    min_len_metacc=ifelse(args.metacc_min_len, metacc_runtime_defaults['min_len']),
+                    #min_match is strong in bin3C
+                    min_match_metacc=ifelse(args.metacc_min_match, metacc_runtime_defaults['min_match']),
+                    min_signal_metacc=ifelse(args.metacc_min_signal, metacc_runtime_defaults['min_signal']),
+                    
+                    
+                    #parameters for bin3c
+                    min_mapq_bin3c=ifelse(args.bin3c_min_mapq, bin3c_runtime_defaults['min_mapq']),
+                    min_len_bin3c=ifelse(args.bin3c_min_len, bin3c_runtime_defaults['min_reflen']),
+                    #min_match is strong in bin3C
+                    min_match_bin3c=ifelse(args.bin3c_min_match, bin3c_runtime_defaults['strong']),
+                    min_signal_bin3c=ifelse(args.bin3c_min_signal, bin3c_runtime_defaults['min_signal'])
+                    )
+    
+
+    logger.info('Raw contact matrix construction finished for metacc and bin3c')
+    
+    save_object(os.path.join(metacc_folder, 'contact_map.p'), cm)
+
+    '''
 
 
-if __name__ == "__main__":
-    main()
+        #The following is the normalization process of MetaCC
+
+    '''
+
+    logger.info('Begin normalizing raw contacts by NormCC for metacc raw matrix')
+    
+    contig_file = os.path.join(metacc_temp_folder , 'contig_info.csv')
+    norm_result = normcc(contig_file)
+    # Load the contig information into a pandas DataFrame
+    contig_info_df = pd.read_csv(contig_file)
+
+    # Pass the DataFrame instead of the file path
+    # hzmap = NormCCMap(metacc_folder, cm.seq_info_metacc, cm.seq_map_metacc, contig_info_df, norm_result)
+
+    
+    ######Construct normalized matrix of Hi-C interaction maps#############
+    hzmap = NormCCMap(metacc_folder,
+                    contig_info_df,
+                    cm.seq_map_metacc,
+                    norm_result,
+                    thres = ifelse(args.thres, metacc_runtime_defaults['thres']))
+                    
+    logger.info('NormCC normalization finished')
+                
+
+    #shutil.rmtree(metacc_temp_folder) ######Remove all intermediate files#######
+    scisp.save_npz(os.path.join(metacc_folder, 'raw_contact_matrix_metacc.npz'), hzmap.seq_map.tocsr())
+    
+    logger.info('MetaCC Normalization results have been saved')
+
+
+

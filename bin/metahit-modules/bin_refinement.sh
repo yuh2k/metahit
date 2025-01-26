@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
 echo "[FREE MEMORY]: $free_mem"
 # Script to perform bin refinement for Metahit
 

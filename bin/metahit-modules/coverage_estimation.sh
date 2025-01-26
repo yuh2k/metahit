@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
 echo "[FREE MEMORY]: $free_mem"
 # Coverage Estimation Script using BBMap and jgi_summarize_bam_contig_depths.
 
