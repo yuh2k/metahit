@@ -1,1 +1,0 @@
-yahs ./output/assembly/final_assembly.fasta output/alignment/sorted_map.bam output/yahs
