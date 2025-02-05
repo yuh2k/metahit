@@ -191,6 +191,18 @@ def scaffolding(args):
     )
     run_command(command)
 
+def genomad(args):
+    print("[INFO] Running genomad annotation")
+    output_dir = absolute_path(args.outdir)
+    ensure_dir_exists(output_dir)
+    cmd = f'"{script_dir}/bin/metahit-modules/genomad.sh" -p "{absolute_path(args.genome_file)}" -o "{output_dir}"'
+    if args.splits:
+        cmd += f' -s {args.splits}'
+    else:
+        cmd += " -s 8"
+    print(f"[DEBUG] Executing command: {cmd}")
+    run_command(cmd)
+
 
 def reassembly(args):
     print("[INFO] Running Reassembly")
