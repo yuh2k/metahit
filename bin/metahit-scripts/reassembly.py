@@ -106,7 +106,7 @@ hic_reverse_cmd = f"cat {args.hic2} | paste - - - - | grep -v -F -f {readname_sg
 cat_sg_forward_cmd = f"cat {sg_in_hic_forward} {args.sg1} > {new_sg_forward}"
 cat_sg_reverse_cmd = f"cat {sg_in_hic_reverse} {args.sg2} > {new_sg_reverse}"
 
-reassemble_cmd = f"bash {args.metahit_path}/bin/metahit-scripts/metaWRAP/bin/metawrap-modules/reassemble_bins.sh -b {args.bin} -o {args.outdir} -1 {args.sg1} -2 {args.sg2} -m {args.m} -t {args.t}"
+reassemble_cmd = f"bash {args.metahit_path}/bin/metahit-scripts/bin/modules/reassemble_bins.sh -b {args.bin} -o {args.outdir} -1 {args.sg1} -2 {args.sg2} -m {args.m} -t {args.t}"
 
 output1 = os.popen(filter_readname_cmd).read()
 print(output1)

@@ -36,10 +36,10 @@ help_message () {
 	echo "	--mdmcleaner		the bin directory have results from MDMcleaner"
 	echo "";}
 
-comm () { ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/print_comment.py "$1" "-"; }
-error () { ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/print_comment.py "$1" "*"; exit 1; }
-warning () { ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/print_comment.py "$1" "*"; }
-announcement () { ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/print_comment.py "$1" "#"; }
+comm () { ./bin/metahit-scripts/bin/scripts/print_comment.py "$1" "-"; }
+error () { ./bin/metahit-scripts/bin/scripts/print_comment.py "$1" "*"; exit 1; }
+warning () { ./bin/metahit-scripts/bin/scripts/print_comment.py "$1" "*"; }
+announcement () { ./bin/metahit-scripts/bin/scripts/print_comment.py "$1" "#"; }
 
 # these functions are for parallelizing the reassembly
 open_sem(){
@@ -118,7 +118,7 @@ if [ $out = None ] || [  $bins = None ] || [ $f_reads = None ] || [ $r_reads = N
 fi
 
 # Checks for correctly configures meta-scripts folder
-if [ ! -s ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/sort_contigs.py ]; then
+if [ ! -s ./bin/metahit-scripts/bin/scripts/sort_contigs.py ]; then
 	error "The folder $SOFT doesnt exist. Please make sure config.sh is in the same filder as the mains scripts and all the paths in the config.sh file are correct"
 fi
 
@@ -182,11 +182,11 @@ if [[ ! -s ${out}/binned_assembly/assembly.fa.amb ]]; then
 	comm "Aligning all reads back to entire assembly and splitting reads into individual fastq files based on their bin membership"
 		if [ "$nanopore" = true ]; then
 		minimap2 -t $threads -ax map-ont ${out}/binned_assembly/assembly.fa $nanopore_reads \
-		| ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/filter_nanopore_reads_for_bin_reassembly.py ${out}/original_bins ${out}/reads_for_reassembly
+		| ./bin/metahit-scripts/bin/scripts/filter_nanopore_reads_for_bin_reassembly.py ${out}/original_bins ${out}/reads_for_reassembly
 	fi
 
 	bwa mem -t $threads ${out}/binned_assembly/assembly.fa $f_reads $r_reads \
-	 | ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/filter_reads_for_bin_reassembly.py ${out}/original_bins ${out}/reads_for_reassembly $strict_max $permissive_max
+	 | ./bin/metahit-scripts/bin/scripts/filter_reads_for_bin_reassembly.py ${out}/original_bins ${out}/reads_for_reassembly $strict_max $permissive_max
 	if [[ $? -ne 0 ]]; then error "Something went wrong with pulling out reads for reassembly..."; fi
 else
 	comm "WARNING: Looks like the assembly was already indexed. Skipping indexing, and also skipping splitting the reads, because it is assumed you already got to this stage. Will proceed directly to assembly. This is because your output folder $out already has outputs from previous runs. If this is not what you intended, re-run the module with a new output folder, or clear $out."
@@ -285,7 +285,7 @@ for i in $( ls ${out}/reassemblies/ ); do
 	
 	#remove shortest contigs (probably artifacts...)
 	if [ -s ${out}/reassemblies/${bin_name}/scaffolds.fasta ]; then
-		./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/rm_short_contigs.py $len\
+		./bin/metahit-scripts/bin/scripts/rm_short_contigs.py $len\
 		 ${out}/reassemblies/${bin_name}/scaffolds.fasta\
 		 > ${out}/reassemblies/${bin_name}/long_scaffolds.fasta
 
@@ -336,7 +336,7 @@ if [ "$run_checkm" = true ]; then
 	mkdir ${out}/tmp
 	checkm lineage_wf -x fa ${out}/reassembled_bins ${out}/reassembled_bins.checkm -t $threads --tmpdir ${out}/tmp --pplacer_threads $p_threads
 	if [[ ! -s ${out}/reassembled_bins.checkm/storage/bin_stats_ext.tsv ]]; then error "Something went wrong with running CheckM. Exiting..."; fi
-	./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/summarize_checkm2.py ${out}/reassembled_bins.checkm/storage/bin_stats_ext.tsv | (read -r; printf "%s\n" "$REPLY"; sort) > ${out}/reassembled_bins.stats
+	./bin/metahit-scripts/bin/scripts/summarize_checkm2.py ${out}/reassembled_bins.checkm/storage/bin_stats_ext.tsv | (read -r; printf "%s\n" "$REPLY"; sort) > ${out}/reassembled_bins.stats
 	if [[ $? -ne 0 ]]; then error "Cannot make checkm summary file. Exiting."; fi
 	rm -r ${out}/tmp
 
@@ -347,7 +347,7 @@ if [ "$run_checkm" = true ]; then
 	announcement "FINDING THE BEST VERSION OF EACH BIN"
 
 	if [ ! -d ${out}/reassembled_best_bins ]; then mkdir ${out}/reassembled_best_bins; fi
-	for i in $(./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/choose_best_bin.py ${out}/reassembled_bins.stats $comp $cont); do 
+	for i in $(./bin/metahit-scripts/bin/scripts/choose_best_bin.py ${out}/reassembled_bins.stats $comp $cont); do 
 		echo "Copying best bin: $i"
 		cp ${out}/reassembled_bins/${i}.fa ${out}/reassembled_best_bins 
 	done
@@ -382,7 +382,7 @@ if [ "$run_checkm" = true ]; then
         if [[ ! -s ${out}/reassembled_bins.checkm/storage/bin_stats_ext.tsv ]]; then error "Something went wrong with running CheckM. Exiting..."; fi
 	rm -r ${out}/tmp
         comm "Finalizing CheckM stats..."
-        ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/summarize_checkm2.py ${out}/reassembled_bins.checkm/storage/bin_stats_ext.tsv | (read -r; printf "%s\n" "$REPLY"; sort) > ${out}/reassembled_bins.stats
+        ./bin/metahit-scripts/bin/scripts/summarize_checkm2.py ${out}/reassembled_bins.checkm/storage/bin_stats_ext.tsv | (read -r; printf "%s\n" "$REPLY"; sort) > ${out}/reassembled_bins.stats
         if [[ $? -ne 0 ]]; then error "Cannot make checkm summary file. Exiting."; fi
 
         comm "Making CheckM plot of ${out}/reassembled_bins bins"
@@ -396,7 +396,7 @@ if [ "$run_checkm" = true ]; then
 	comm "making reassembly N50, compleiton, and contamination summary plots."
 	head -n 1 ${out}/work_files/reassembled_bins.stats > ${out}/original_bins.stats
 	grep orig ${out}/work_files/reassembled_bins.stats >> ${out}/original_bins.stats
-	./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/plot_reassembly.py $out $comp $cont ${out}/reassembled_bins.stats ${out}/original_bins.stats
+	./bin/metahit-scripts/bin/scripts/plot_reassembly.py $out $comp $cont ${out}/reassembled_bins.stats ${out}/original_bins.stats
 	if [[ $? -ne 0 ]]; then error "Something went wrong with plotting the reassembly summary plots. Exiting..."; fi
 fi
 

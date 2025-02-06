@@ -38,7 +38,7 @@ if [[ $? -ne 0 ]]; then
 	exit 1
 fi
 
-comm () { ./bin/metahit-scripts/metaWRAP/bin/metawrap-scripts/print_comment.py "$1" "-"; }
+comm () { ./bin/metahit-scripts/bin/scripts/print_comment.py "$1" "-"; }
 
 ########################################################################################################
 ########################     LOADING IN THE PARAMETERS AND RUNNING MODULE       ########################
