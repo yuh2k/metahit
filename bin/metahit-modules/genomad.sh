@@ -54,9 +54,9 @@ mkdir -p "$output_dir"
 # Activate the genomad conda environment (ensure the environment with genomad is correctly installed)
 echo "[INFO] Activating genomad environment 'genomad_env'..."
 eval "$(conda shell.bash hook)"
-conda activate genomad_env
+conda activate genomad
 if [ $? -ne 0 ]; then
-    echo "Error: Failed to activate conda environment 'genomad_env'."
+    echo "Error: Failed to activate conda environment 'genomad'."
     exit 1
 fi
 

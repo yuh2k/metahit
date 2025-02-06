@@ -493,6 +493,8 @@ def main():
             viralcc(args)
     elif args.command == "annotation":
         annotation(args)
+    elif args.command == "genomad":
+        genomad(args)
 
 
 
