@@ -90,6 +90,9 @@ fi
 
 
 conda env create -f env.yaml
+conda env create -f checkm2.yaml
+conda create -n genomad -c conda-forge -c bioconda genomad
+
 # Ensure all external binaries have execute permissions
 echo_info "Ensuring all external binaries have execute permissions."
 chmod +x "${BIN_DIR}"/*

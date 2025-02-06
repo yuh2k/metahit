@@ -191,6 +191,18 @@ def scaffolding(args):
     )
     run_command(command)
 
+def genomad(args):
+    print("[INFO] Running genomad annotation")
+    output_dir = absolute_path(args.outdir)
+    ensure_dir_exists(output_dir)
+    cmd = f'"{script_dir}/bin/metahit-modules/genomad.sh" -p "{absolute_path(args.genome_file)}" -o "{output_dir}"'
+    if args.splits:
+        cmd += f' -s {args.splits}'
+    else:
+        cmd += " -s 8"
+    print(f"[DEBUG] Executing command: {cmd}")
+    run_command(cmd)
+
 
 def reassembly(args):
     print("[INFO] Running Reassembly")
@@ -447,6 +459,12 @@ def main():
     virus_host_parser.add_argument("-m", "--memory", type=int, default=24, help="Memory in GB")
     virus_host_parser.set_defaults(func=virus_host_interaction)
 
+    # geNomad
+    genomad_parser = subparsers.add_parser("genomad", help="Run genomad annotation")
+    genomad_parser.add_argument("--genome_file", required=True, help="Path to input genome sequence file (fasta/fna)")
+    genomad_parser.add_argument("-o", "--outdir", required=True, help="Output directory for genomad results")
+    genomad_parser.add_argument("-s", "--splits", type=int, default=8, help="Number of splits to use (default: 8)")
+    genomad_parser.set_defaults(func=genomad)
 
     # Link the subcommand to the function
     refinement_parser.set_defaults(func=bin_refinement)

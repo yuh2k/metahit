@@ -181,3 +181,5 @@ echo "[INFO] Running ViralCC pipeline..."
     --contact "path/to/contact_matrix" \
     --OUTDIR "output/virus_host_interaction" \
     -t 8 -m 32
+
+./metahit.py genomad --genome_file ${OUTPUT_DIR}/readqc/hic/final_reads_1.fastq.gz -o output/genomad -s 16
