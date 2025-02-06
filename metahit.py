@@ -459,6 +459,12 @@ def main():
     virus_host_parser.add_argument("-m", "--memory", type=int, default=24, help="Memory in GB")
     virus_host_parser.set_defaults(func=virus_host_interaction)
 
+    # geNomad
+    genomad_parser = subparsers.add_parser("genomad", help="Run genomad annotation")
+    genomad_parser.add_argument("--genome_file", required=True, help="Path to input genome sequence file (fasta/fna)")
+    genomad_parser.add_argument("-o", "--outdir", required=True, help="Output directory for genomad results")
+    genomad_parser.add_argument("-s", "--splits", type=int, default=8, help="Number of splits to use (default: 8)")
+    genomad_parser.set_defaults(func=genomad)
 
     # Link the subcommand to the function
     refinement_parser.set_defaults(func=bin_refinement)
