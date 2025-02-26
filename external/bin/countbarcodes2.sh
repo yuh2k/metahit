@@ -1,0 +1,1 @@
+../bbmap/countbarcodes2.sh

@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
+echo "[FREE MEMORY]: $free_mem"
 set -e
 set -o pipefail
 set -x
 
 # Default values for options
 SAMTOOLS_FILTER="-F 0x904"
-THREADS=4
-
+THREADS=20
+# add BWA and samtools memory parameters if available
 # Help message
 usage() {
-    echo "    -p metahit path"
+    echo "   -p metahit path"
     echo ""
     echo "Usage: $0 [options]"
     echo ""
@@ -19,12 +21,12 @@ usage() {
     echo "  -1, --reads1        Path to the first reads file (default: output/readqc/hic/final_reads_1.fastq)"
     echo "  -2, --reads2        Path to the second reads file (default: output/readqc/hic/final_reads_2.fastq)"
     echo "  -o, --output        Output directory (default: output/alignment)"
-    echo "  -t, --threads       Number of threads to use (default: 4)"
-    echo "  --samtools-filter   samtools view filter options (default: '-F 0x904')"
+    echo "  -t, --threads       Number of threads to use (default: 20)"
+    echo "  --samtools-filter   samtools view filter options (default: '0x904')" 
     echo "  -h, --help          Display this help message"
     echo ""
     echo "Example:"
-    echo "  $0 --reference ref.fa --reads1 reads_1.fq --reads2 reads_2.fq --output alignment_output --threads 8 --samtools-filter '-F 0x4'"
+    echo "  $0 --reference ref.fa --reads1 reads_1.fq --reads2 reads_2.fq --output alignment_output --threads 20 --samtools-filter '-F 0x904'"
     echo ""
 }
 
@@ -85,8 +87,8 @@ READS_2=${READS_2:-"output/readqc/hic/final_reads_2.fastq"}
 OUTPUT_DIR=${OUTPUT_DIR:-"output/alignment"}
 
 # Define tool paths
-BWA_PATH="${path}/external/bin/bwa"
-SAMTOOLS_PATH="${path}/external/bin/samtools"
+BWA_PATH="bwa"
+SAMTOOLS_PATH="samtools"
 
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
@@ -97,7 +99,7 @@ $BWA_PATH index "$REFERENCE"
 
 # Align reads with BWA MEM
 echo "Aligning reads with BWA MEM..."
-$BWA_PATH mem -5SP -t "$THREADS" "$REFERENCE" "$READS_1" "$READS_2" > "$OUTPUT_DIR/map.sam"
+$BWA_PATH mem -t "$THREADS" "$REFERENCE" "$READS_1" "$READS_2" > "$OUTPUT_DIR/map.sam"
 
 # Convert SAM to BAM
 echo "Converting SAM to BAM..."

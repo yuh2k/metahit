@@ -1,0 +1,1 @@
+../bbmap/sketchblacklist2.sh

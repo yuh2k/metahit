@@ -1,0 +1,1 @@
+../bbmap/mergebarcodes.sh

@@ -1,0 +1,1 @@
+../bbmap/testformat2.sh

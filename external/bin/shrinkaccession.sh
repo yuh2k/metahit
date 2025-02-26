@@ -1,0 +1,1 @@
+../bbmap/shrinkaccession.sh

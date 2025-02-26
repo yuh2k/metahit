@@ -1,0 +1,1 @@
+../bbmap/splitsam6way.sh

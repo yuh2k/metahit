@@ -1,0 +1,1 @@
+../bbmap/gi2ancestors.sh

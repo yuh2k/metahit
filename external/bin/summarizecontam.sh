@@ -1,0 +1,1 @@
+../bbmap/summarizecontam.sh

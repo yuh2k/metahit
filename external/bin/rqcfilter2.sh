@@ -1,0 +1,1 @@
+../bbmap/rqcfilter2.sh

@@ -1,0 +1,1 @@
+../bbmap/bbmerge-auto.sh

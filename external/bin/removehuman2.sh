@@ -1,0 +1,1 @@
+../bbmap/removehuman2.sh

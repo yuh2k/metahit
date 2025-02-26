@@ -1,65 +1,63 @@
 #!/usr/bin/env bash
-# Help function to display usage
-function show_help {
-    echo "    -p metahit path"
-    echo "Usage: $0 --bam BAM_FILE --fasta FASTA_FILE --out OUTPUT_DIR [--coverage COVERAGE_FILE]"
-    echo ""
-    echo "Required arguments:"
-    echo "  --bam         Path to the BAM file containing Hi-C reads"
-    echo "  --fasta       Path to the FASTA file containing contig sequences"
-    echo "  --out         Output directory to save Hi-C contact matrix (.npz) and contig info (.csv)"
-    echo ""
-    echo "Optional arguments:"
-    echo "  --coverage    Path to the coverage.txt file"
-    echo ""
-    echo "Example usage:"
-    echo "$0 --bam output/alignment/sorted_map.bam --fasta output/assembly/final_assembly.fasta --out output/normalization/raw --coverage output/estimation/coverage.txt"
-}
-
-# Parse command line arguments
-while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        -p) path=$2; shift 2;;
-        --bam) BAM_FILE="$2"; shift ;;
-        --fasta) FASTA_FILE="$2"; shift ;;
-        --out) OUTPUT_DIR="$2"; shift ;;
-        --coverage) COVERAGE_FILE="$2"; shift ;;
-        --help) show_help; exit 0 ;;
-        *) echo "Unknown parameter passed: $1"; show_help; exit 1 ;;
-    esac
-    shift
-done
-
-# Check if required arguments are provided
-if [ -z "$BAM_FILE" ] || [ -z "$FASTA_FILE" ] || [ -z "$OUTPUT_DIR" ]; then
-    echo "Error: Missing required arguments."
-    show_help
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
+echo "[FREE MEMORY]: $free_mem"
+# Check if the correct number of arguments is passed
+if [ "$#" -lt 6 ]; then
+    echo "Usage: $0 --bam <BAM file> --fasta <FASTA file> --out <output directory> --enzyme <enzyme name> [optional parameters]"
     exit 1
 fi
 
-# Create output directory
-mkdir -p "$OUTPUT_DIR"
+# Parse input arguments
+BAM=""
+FASTA=""
+OUTDIR=""
+ENZYME=""
+METACC_MIN_SIGNAL=1
+METACC_MIN_LEN=1000
+METACC_MIN_MAPQ=30
+METACC_MIN_MATCH=30
 
-# Run raw_contact.py
-python ${path"/bin/metahit-scripts/raw_contact.py \
-    --bam "$BAM_FILE" \
-    --fasta "$FASTA_FILE" \
-    --out "$OUTPUT_DIR" \
-    ${COVERAGE_FILE:+--coverage "$COVERAGE_FILE"}
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -p) path=$2; shift 2;;
+        --bam) BAM="$2"; shift 2;;
+        --fasta) FASTA="$2"; shift 2;;
+        --out) OUTDIR="$2"; shift 2;;
+        --enzyme) ENZYME="$2"; shift 2;;
+        --metacc-min-signal) METACC_MIN_SIGNAL="$2"; shift 2;;
+        --metacc-min-len) METACC_MIN_LEN="$2"; shift 2;;
+        --metacc-min-mapq) METACC_MIN_MAPQ="$2"; shift 2;;
+        --metacc-min-match) METACC_MIN_MATCH="$2"; shift 2;;
+        *) echo "[ERROR] Unknown parameter: $1"; exit 1;;
+    esac
+done
 
-# Define expected output files
-CONTACT_MATRIX_FILE="$OUTPUT_DIR/contact_matrix_user.npz"
-CONTIG_INFO_FILE="$OUTPUT_DIR/contig_info.csv"
+# Check if required arguments are provided
+if [ -z "$BAM" ] || [ -z "$FASTA" ] || [ -z "$OUTDIR" ] || [ -z "$ENZYME" ]; then
+    echo "[ERROR] Missing required arguments."
+    echo "Usage: $0 --bam <BAM file> --fasta <FASTA file> --out <output directory> --enzyme <enzyme name> [optional parameters]"
+    exit 1
+fi
 
-# Check if output files were generated
-if [[ -f "$CONTACT_MATRIX_FILE" && -f "$CONTIG_INFO_FILE" ]]; then
-    echo "Raw contact generation completed successfully."
-    echo "Output files:"
-    echo "  Contact matrix: $CONTACT_MATRIX_FILE"
-    echo "  Contig info: $CONTIG_INFO_FILE"
+# Create output directory if it doesn't exist
+mkdir -p "$OUTDIR"
+
+
+# Run the Python script to generate raw contact matrices with the provided parameters
+python ${path}/bin/metahit-scripts/raw_contact.py \
+    --BAM "$BAM" \
+    --FASTA "$FASTA" \
+    --OUTDIR "$OUTDIR" \
+    --enzyme "$ENZYME" \
+    --metacc-min-signal "$METACC_MIN_SIGNAL" \
+    --metacc-min-len "$METACC_MIN_LEN" \
+    --metacc-min-mapq "$METACC_MIN_MAPQ" \
+    --metacc-min-match "$METACC_MIN_MATCH"
+
+# Check if the Python script executed successfully
+if [ $? -eq 0 ]; then
+    echo "[INFO] Raw contact matrix generation completed successfully."
 else
-    echo "Error: Expected output files were not generated."
-    [[ ! -f "$CONTACT_MATRIX_FILE" ]] && echo "Missing file: $CONTACT_MATRIX_FILE"
-    [[ ! -f "$CONTIG_INFO_FILE" ]] && echo "Missing file: $CONTIG_INFO_FILE"
+    echo "[ERROR] Raw contact matrix generation failed."
     exit 1
 fi

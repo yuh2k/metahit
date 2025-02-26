@@ -1,0 +1,1 @@
+../bbmap/cutgff.sh

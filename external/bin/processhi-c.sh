@@ -1,0 +1,1 @@
+../bbmap/processhi-c.sh

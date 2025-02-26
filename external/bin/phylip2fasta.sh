@@ -1,0 +1,1 @@
+../bbmap/phylip2fasta.sh

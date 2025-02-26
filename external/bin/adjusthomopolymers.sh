@@ -1,0 +1,1 @@
+../bbmap/adjusthomopolymers.sh

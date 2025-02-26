@@ -1,0 +1,1 @@
+../bbmap/a_sample_mt.sh

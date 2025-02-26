@@ -1,0 +1,1 @@
+../bbmap/synthmda.sh

@@ -1,0 +1,1 @@
+../bbmap/bbest.sh

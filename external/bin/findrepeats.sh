@@ -1,0 +1,1 @@
+../bbmap/findrepeats.sh

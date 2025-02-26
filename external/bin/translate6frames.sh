@@ -1,0 +1,1 @@
+../bbmap/translate6frames.sh

@@ -1,0 +1,1 @@
+../bbmap/cg2illumina.sh

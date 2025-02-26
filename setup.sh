@@ -2,7 +2,6 @@
 
 # setup.sh
 # This script sets up the necessary dependencies for the MetaHit pipeline.
-# It downloads BWA (from GitHub, builds it), Samtools, FastQC, and BBTools
 # into the "external" directory within the repository.
 
 # Exit immediately if a command exits with a non-zero status
@@ -41,97 +40,7 @@ fi
 echo_info "Installing dependencies using Conda..."
 conda install -y -c bioconda wget unzip openjdk perl git
 
-# Function to download and build BWA from GitHub
-function install_bwa() {
-    echo_info "Cloning BWA repository from GitHub..."
-    cd "$EXTERNAL_DIR"
-    
-    # Remove existing 'bwa' directory if it exists to prevent conflicts
-    if [ -d "bwa" ]; then
-        echo_info "Removing existing 'bwa' directory to ensure a clean build."
-        rm -rf bwa
-    fi
 
-    git clone https://github.com/lh3/bwa.git
-    cd bwa
-    echo_info "Building BWA..."
-    make
-
-    echo_info "Copying BWA binary to 'external/bin'."
-    cp bwa "$BIN_DIR/"
-
-    cd ..
-    # Clean up
-    rm -rf bwa
-    echo_info "BWA built and installed successfully."
-}
-
-# Function to download, extract, and install Samtools
-function install_samtools() {
-    SAMTOOLS_VERSION="1.20"
-    SAMTOOLS_TARBALL="samtools-${SAMTOOLS_VERSION}.tar.bz2"
-    SAMTOOLS_URL="https://github.com/samtools/samtools/releases/download/${SAMTOOLS_VERSION}/samtools-${SAMTOOLS_VERSION}.tar.bz2"
-
-    if [ ! -f "${EXTERNAL_DIR}/${SAMTOOLS_TARBALL}" ]; then
-        echo_info "Downloading Samtools ${SAMTOOLS_VERSION}..."
-        wget -O "${EXTERNAL_DIR}/${SAMTOOLS_TARBALL}" "${SAMTOOLS_URL}"
-    else
-        echo_info "Samtools tarball already exists, skipping download."
-    fi
-
-    if [ ! -f "${EXTERNAL_DIR}/samtools/bin/samtools" ]; then
-        echo_info "Extracting Samtools..."
-        tar -xjf "${EXTERNAL_DIR}/${SAMTOOLS_TARBALL}" -C "$EXTERNAL_DIR"
-        cd "${EXTERNAL_DIR}/samtools-${SAMTOOLS_VERSION}"
-        echo_info "Configuring Samtools..."
-        ./configure --prefix="${EXTERNAL_DIR}/samtools"
-        echo_info "Building Samtools..."
-        make
-        echo_info "Installing Samtools..."
-        make install
-        cd ../..
-
-        echo_info "Creating a symbolic link to samtools binary in 'external/bin'..."
-        ln -sf "${EXTERNAL_DIR}/samtools/bin/samtools" "${BIN_DIR}/samtools"
-
-        echo_info "Cleaning up Samtools source directory..."
-        rm -rf "${EXTERNAL_DIR}/samtools-${SAMTOOLS_VERSION}" "${EXTERNAL_DIR}/${SAMTOOLS_TARBALL}"
-
-        echo_info "Samtools installed successfully."
-    else
-        echo_info "Samtools binary already exists in 'external/bin', skipping compilation."
-    fi
-}
-
-# Function to download and install FastQC
-function install_fastqc() {
-    FASTQC_VERSION="0.11.9"
-    FASTQC_ZIP="fastqc_v${FASTQC_VERSION}.zip"
-    FASTQC_URL="https://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v${FASTQC_VERSION}.zip"
-
-    if [ ! -f "${EXTERNAL_DIR}/${FASTQC_ZIP}" ]; then
-        echo_info "Downloading FastQC ${FASTQC_VERSION}..."
-        wget -O "${EXTERNAL_DIR}/${FASTQC_ZIP}" "${FASTQC_URL}"
-    else
-        echo_info "FastQC zip file already exists, skipping download."
-    fi
-
-    if [ ! -f "${BIN_DIR}/fastqc" ]; then
-        echo_info "Extracting FastQC..."
-        unzip "${EXTERNAL_DIR}/${FASTQC_ZIP}" -d "${EXTERNAL_DIR}"
-        mv "${EXTERNAL_DIR}/FastQC" "${EXTERNAL_DIR}/fastqc"
-        chmod +x "${EXTERNAL_DIR}/fastqc/fastqc"
-
-        echo_info "Creating a symbolic link to FastQC binary in 'external/bin'..."
-        ln -sf "${EXTERNAL_DIR}/fastqc/fastqc" "${BIN_DIR}/fastqc"
-
-        # Clean up
-        rm "${EXTERNAL_DIR}/${FASTQC_ZIP}"
-        echo_info "FastQC installed successfully."
-    else
-        echo_info "FastQC binary already exists in 'external/bin', skipping extraction."
-    fi
-}
 
 function install_bbtools() {
     BBTOOLS_VERSION="39.10"  # Latest version as per user request
@@ -163,39 +72,29 @@ function install_bbtools() {
 }
 
 # Install all dependencies
-install_bwa
-install_samtools
-install_fastqc
 install_bbtools 
 # Verify installations
 echo_info "Verifying installations..."
 
-if [ ! -f "${BIN_DIR}/bwa" ]; then
-    echo_error "BWA binary not found in external/bin."
-    exit 1
-else
-    echo_info "BWA installed successfully."
+
+
+# Check if the gtdbtk-2.4.0 environment exists
+if ! conda info --envs | grep -q "gtdbtk"; then
+    echo "[INFO] Creating GTDB-Tk environment 'gtdbtk'..."
+    conda create -n gtdbtk -c bioconda -c conda-forge gtdbtk -y
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to create GTDB-Tk environment."
+        exit 1
+    fi
 fi
 
-if [ ! -f "${BIN_DIR}/samtools" ]; then
-    echo_error "Samtools binary not found in external/bin."
-    exit 1
-else
-    echo_info "Samtools installed successfully."
-fi
 
-if [ ! -f "${BIN_DIR}/fastqc" ]; then
-    echo_error "FastQC binary not found in external/bin."
-    exit 1
-else
-    echo_info "FastQC installed successfully."
-fi
+conda env create -f env.yaml
+conda env create -f checkm2.yaml
+conda create -n metahit_final_genomad -c conda-forge -c bioconda genomad
 
 # Ensure all external binaries have execute permissions
 echo_info "Ensuring all external binaries have execute permissions."
-chmod +x "${BIN_DIR}/bwa"
-chmod +x "${BIN_DIR}/samtools"
-chmod +x "${BIN_DIR}/fastqc"
 chmod +x "${BIN_DIR}"/*
 
 # Optionally, add external/bin to PATH

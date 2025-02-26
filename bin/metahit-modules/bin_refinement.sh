@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
+echo "[FREE MEMORY]: $free_mem"
 # Script to perform bin refinement for Metahit
 
 # Display usage if not enough arguments
@@ -25,9 +26,8 @@ OUTDIR=$3
 path=$4
 shift 4
 
-module load anaconda3 &&
-conda activate metahit_env
-
+#eval "$(conda shell.bash hook)"
+#conda activate checkm2
 # Path to the bin refinement Python script
 BIN_REFINEMENT_SCRIPT="${path}/bin/metahit-scripts/bin_refinement.py"
 
@@ -47,3 +47,4 @@ fi
 
 # Inform that the process has been completed successfully
 echo "Bin refinement completed successfully."
+conda deactivate
