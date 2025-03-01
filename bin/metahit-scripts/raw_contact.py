@@ -1321,7 +1321,7 @@ if __name__ == '__main__':
     root.addHandler(ch)
 
     # File log listens to all levels from root
-    log_path = os.path.join(args.OUTDIR, 'raw_contact.log')
+    log_path = os.path.join(args.OUTDIR, 'bin_refinement.log')
     fh = logging.FileHandler(log_path, mode='a')
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(formatter)
@@ -1365,14 +1365,13 @@ if __name__ == '__main__':
         'max_cont': 10.0,
         'report_quality': 10.0
     }
-   
-    enzyme = args.enzyme[0].split(",") 
+    
 
         
     logger.info('Begin constructing raw contact matrix for metacc and bin3c...')
     cm = ContactMatrix(
                     args.BAM,
-                    enzyme,
+                    args.enzyme,
                     args.FASTA,
                     args.OUTDIR,
                     metacc_folder,

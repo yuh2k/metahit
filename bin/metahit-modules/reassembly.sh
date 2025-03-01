@@ -19,7 +19,7 @@ shift
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -p)
-            path=$2 ;
+            path=$2
             shift 2
             ;;
         *)
@@ -28,10 +28,8 @@ while [[ "$#" -gt 0 ]]; do
             ;;
     esac
 done
-echo "$COMMAND" "$@"
-echo "${path}"
 
-REASSEMBLY_SCRIPT="${path}/bin/metahit-scripts/reassembly.py"
+REASSEMBLY_SCRIPT="./${path}/bin/metahit-scripts/reassembly.py"
 if [ ! -f "$REASSEMBLY_SCRIPT" ]; then
     echo "Error: reassembly.py not found at $REASSEMBLY_SCRIPT"
     exit 1

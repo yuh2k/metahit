@@ -79,9 +79,9 @@ echo_info "Verifying installations..."
 
 
 # Check if the gtdbtk-2.4.0 environment exists
-if ! conda info --envs | grep -q "gtdbtk"; then
-    echo "[INFO] Creating GTDB-Tk environment 'gtdbtk'..."
-    conda create -n gtdbtk -c bioconda -c conda-forge gtdbtk -y
+if ! conda info --envs | grep -q "gtdbtk-2.4.0"; then
+    echo "[INFO] Creating GTDB-Tk environment 'gtdbtk-2.4.0'..."
+    conda create -n gtdbtk-2.4.0 -c bioconda -c conda-forge gtdbtk=2.4.0 -y
     if [ $? -ne 0 ]; then
         echo "Error: Failed to create GTDB-Tk environment."
         exit 1
@@ -91,7 +91,7 @@ fi
 
 conda env create -f env.yaml
 conda env create -f checkm2.yaml
-conda create -n metahit_final_genomad -c conda-forge -c bioconda genomad
+conda create -n genomad -c conda-forge -c bioconda genomad
 
 # Ensure all external binaries have execute permissions
 echo_info "Ensuring all external binaries have execute permissions."

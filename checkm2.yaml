@@ -1,4 +1,4 @@
-name: metahit_final_checkm2 
+name: checkm2
 channels:
   - conda-forge
   - bioconda

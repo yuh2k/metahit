@@ -24,9 +24,7 @@ global_parser.add_argument('-m', help='memory', default='24')
 
 args = global_parser.parse_args()
 
-os.mkdir(args.outdir)
 fname  = os.path.join(args.outdir,"insert_size.txt")
-print(fname)
 insert_size_Cmd = f"samtools view {args.bam} | cut -f9 | awk '{{print sqrt($0^2)}}' > {fname}"
 insert_size_execution = os.popen(insert_size_Cmd).read()
 print(insert_size_execution)

@@ -188,7 +188,7 @@ if __name__ == '__main__':
     metawrap_folder = os.path.join(args.OUTDIR , 'metahit_bin_refinement')
     
     
-    
+    enzyme = args.enzyme[0].split(",")
     try:
         make_dir(args.OUTDIR)
     except IOError:
@@ -307,12 +307,11 @@ if __name__ == '__main__':
         'report_quality': 10.0
     }
     
-    enzyme = args.enzyme[0].split(",") 
     try:
         logger.info('Begin constructing raw contact matrix for metacc and bin3c...')
         cm = ContactMatrix(
             args.BAM,
-            enzyme,
+            args.enzyme,
             args.FASTA,
             args.OUTDIR,
             metacc_folder,

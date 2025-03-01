@@ -26,8 +26,8 @@ OUTDIR=$3
 path=$4
 shift 4
 
-#eval "$(conda shell.bash hook)"
-#conda activate checkm2
+eval "$(conda shell.bash hook)"
+conda activate checkm2
 # Path to the bin refinement Python script
 BIN_REFINEMENT_SCRIPT="${path}/bin/metahit-scripts/bin_refinement.py"
 

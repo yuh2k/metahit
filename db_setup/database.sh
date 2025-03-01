@@ -1,7 +1,7 @@
-export PATH="/work/ndx163/test_software/metahit_final/metahit4/metahit/external/bin:$PATH"
-export PATH="/work/ndx163/test_software/metahit_final/metahit4/metahit:$PATH"
-export PATH="/work/ndx163/test_software/metahit_final/metahit4/metahit/:$PATH"
-DB_DIR="../database"
+#!/bin/bash
+
+# Define default download directory
+DB_DIR="$../databases"
 mkdir -p "$DB_DIR"
 
 # Function to download a file with progress
@@ -19,7 +19,7 @@ extract_tar_gz() {
     echo "Extracting: $file"
     tar -xvzf "$file" -C "$dest_dir"
 }
-:'
+
 # 1. Download CheckM Database
 CHECKM_URL="https://data.ace.uq.edu.au/public/CheckM_databases/checkm_data_2015_01_16.tar.gz"
 CHECKM_DB="$DB_DIR/checkm_data.tar.gz"
@@ -29,10 +29,9 @@ extract_tar_gz "$CHECKM_DB" "$DB_DIR"
 checkm data setRoot "$DB_DIR"
 
 # 2. Download CheckM2 Database
-source activate base
-conda activate /home/ndx163/miniconda3/envs/metahit_final_checkm2
-../bin/metahit-scripts/reassmebly/bin/checkm2/bin/checkm2 database --download --path "$DB_DIR"
-'
+dat
+checkm2 database --download --path "$DB_DIR"
+
 
 # 3. Download GTDB-Tk Database
 GTDBTK_URL="https://data.gtdb.ecogenomic.org/releases/release220/220.0/auxillary_files/gtdbtk_package/full_package/gtdbtk_r220_data.tar.gz"
@@ -41,7 +40,7 @@ GTDBTK_DB="$DB_DIR/gtdbtk_data.tar.gz"
 download_file "$GTDBTK_URL" "$GTDBTK_DB"
 extract_tar_gz "$GTDBTK_DB" "$DB_DIR"
 
-conda activate /home/ndx163/miniconda3/envs/gtdbtk
+conda activate gtdbtk-2.4.0
 conda env config vars set GTDBTK_DATA_PATH="$DB_DIR"
 
 # Cleanup downloaded files

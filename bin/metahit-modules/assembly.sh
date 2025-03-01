@@ -14,12 +14,13 @@ help_message () {
     echo "    -l INT          Minimum length of assembled contigs (default=1000)"
     echo ""
     echo "    --megahit       Assemble with MEGAHIT (default)"
-    echo "    --spades    Assemble with metaSPAdes instead of MEGAHIT"
+    echo "    --metaspades    Assemble with metaSPAdes instead of MEGAHIT"
     echo "    --metaflye      Assemble with Flye"
     echo "    --flye-method STR Flye method (e.g., --nano-raw, --nano-hq, --pacbio-raw)"
     echo ""
 }
 
+SOFT="./${path}/bin/metahit-scripts"
 
 # Default parameters
 available_mem_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
@@ -33,7 +34,7 @@ min_len=1000
 merge_level="20,0.95"
 flye_method="--nano-raw"  # Default Flye method
 
-spades_assemble=false
+metaspades_assemble=false
 megahit_assemble=true
 flye_assemble=false
 
@@ -46,14 +47,14 @@ k_step=12
 k_list="21,33,55,61"
 
 # Load in parameters
-OPTS=$(getopt -o hp:t:m:o:1:2:l: --long help,megahit,spades,metaflye,flye-method:,k-min:,k-max:,k-step:,k-list:,merge-level: -- "$@")
+OPTS=$(getopt -o hp:t:m:o:1:2:l: --long help,megahit,metaspades,metaflye,flye-method:,k-min:,k-max:,k-step:,k-list:,merge-level: -- "$@")
 if [ $? != 0 ]; then help_message; exit 1; fi
 
 eval set -- "$OPTS"
 
 while true; do
     case "$1" in
-        --metaflye) flye_assemble=true; megahit_assemble=false; spades_assemble=false; shift ;;
+        --metaflye) flye_assemble=true; megahit_assemble=false; metaspades_assemble=false; shift ;;
         --flye-method) flye_method=$2; shift 2;;
         -p) path=$2; shift 2;;
         -t) threads=$2; shift 2;;
@@ -63,8 +64,8 @@ while true; do
         -2) reads_2=$2; shift 2;;
         -l) min_len=$2; shift 2;;
         -h | --help) help_message; exit 0; shift ;;
-        --megahit) megahit_assemble=true; spades_assemble=false; shift ;;
-        --spades) spades_assemble=true; megahit_assemble=false; shift ;;
+        --megahit) megahit_assemble=true; metaspades_assemble=false; shift ;;
+        --metaspades) metaspades_assemble=true; megahit_assemble=false; shift ;;
         --k-min) k_min=$2; shift 2;;
         --k-max) k_max=$2; shift 2;;
         --k-step) k_step=$2; shift 2;;
@@ -75,8 +76,6 @@ while true; do
     esac
 done
 
-SOFT="${path}/bin/metahit-scripts"
-
 # Validate required arguments
 if [ "$out" = "false" ] || [ "$reads_1" = "false" ] || [ "$reads_2" = "false" ]; then 
     help_message; exit 1
@@ -84,7 +83,7 @@ fi
 
 # Dependency checks
 echo "[INFO] Checking dependencies..."
-if [ "$spades_assemble" = true ] && ! command -v spades.py &> /dev/null; then
+if [ "$metaspades_assemble" = true ] && ! command -v metaspades.py &> /dev/null; then
     echo "[ERROR] metaSPAdes is not installed or not in the PATH."; exit 1
 fi
 
@@ -107,7 +106,7 @@ fi
 mkdir -p "$out" || { echo "Error: Cannot create output directory."; exit 1; }
 
 # Validate and set up assembler-specific parameters
-if [ "$spades_assemble" = true ]; then
+if [ "$metaspades_assemble" = true ]; then
     # Validate k-mer sizes for metaSPAdes
     IFS=',' read -ra K_ARRAY <<< "$k_list"
     for k in "${K_ARRAY[@]}"; do
@@ -155,10 +154,10 @@ if [ "$megahit_assemble" = true ]; then
 fi
 
 # Run the selected assembler
-if [ "$spades_assemble" = true ]; then
+if [ "$metaspades_assemble" = true ]; then
     echo "ASSEMBLING WITH metaSPAdes"
-    spades.py --tmp-dir "${out}/spades.tmp" -k "$k_list" -t "$threads" -m "$mem" -o "${out}/spades" -1 "$reads_1" -2 "$reads_2"
-    if [ ! -f "${out}/spades/scaffolds.fasta" ]; then echo "Error: metaSPAdes assembly failed."; exit 1; fi
+    metaspades.py --tmp-dir "${out}/metaspades.tmp" -k "$k_list" -t "$threads" -m "$mem" -o "${out}/metaspades" -1 "$reads_1" -2 "$reads_2"
+    if [ ! -f "${out}/metaspades/scaffolds.fasta" ]; then echo "Error: metaSPAdes assembly failed."; exit 1; fi
 fi
 
 if [ "$megahit_assemble" = true ]; then
@@ -182,8 +181,8 @@ fi
 
 
 # Process the assembly output
-if [ "$spades_assemble" = true ]; then
-    ${SOFT}/rm_short_contigs.py "$min_len" "${out}/spades/scaffolds.fasta" > "${out}/final_assembly.fasta"
+if [ "$metaspades_assemble" = true ]; then
+    ${SOFT}/rm_short_contigs.py "$min_len" "${out}/metaspades/scaffolds.fasta" > "${out}/final_assembly.fasta"
 fi
 
 if [ "$megahit_assemble" = true ]; then
