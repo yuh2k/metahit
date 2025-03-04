@@ -307,6 +307,7 @@ if __name__ == '__main__':
         'report_quality': 10.0
     }
     
+    enzyme = args.enzyme[0].split(",") 
     try:
         logger.info('Begin constructing raw contact matrix for metacc and bin3c...')
         cm = ContactMatrix(
