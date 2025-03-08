@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-
+free_mem=$(free -h | awk '/^Mem:/ {print $4}')
+echo "[FREE MEMORY]: $free_mem"
 # Script to perform bin refinement for Metahit
 
 # Display usage if not enough arguments
@@ -47,3 +48,4 @@ fi
 
 # Inform that the process has been completed successfully
 echo "Bin refinement completed successfully."
+conda deactivate
