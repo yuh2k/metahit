@@ -3,16 +3,77 @@ import argparse
 import subprocess
 import os
 import sys
+import time
+import logging
 
-script_dir=sys.path[0]
+# Global logger ("metahit") which aggregates messages from all modules.
+def init_global_logger():
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    log_dir = os.path.join("output", "logs", "metahit")
+    os.makedirs(log_dir, exist_ok=True)
+    log_filename = os.path.join(log_dir, f"metahit_log_{timestamp}.log")
+    logger = logging.getLogger("metahit")
+    logger.setLevel(logging.INFO)
+    # Clear existing handlers if any
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    fh = logging.FileHandler(log_filename)
+    fh.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    return logger
 
-def run_command(command):
-    try:
-        print(f"[INFO] Executing command:\n{command}")
-        subprocess.run(command, shell=True, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"[ERROR] Command failed: {e}")
-        exit(1)
+global_logger = init_global_logger()
+script_dir = sys.path[0]
+
+# Create a logger for a module named <module> that writes to output/logs/<module>/<module>_log_{timestamp}.log.
+# Because the logger’s name is "metahit.<module>", its messages will also propagate to the global logger.
+def get_step_logger(step):
+    logger = logging.getLogger(f"metahit.{step}")
+    logger.setLevel(logging.INFO)
+    # Clear existing handlers to avoid duplicates.
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    step_log_dir = os.path.join("output", "logs", step)
+    os.makedirs(step_log_dir, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    log_filename = os.path.join(step_log_dir, f"{step}_log_{timestamp}.log")
+    fh = logging.FileHandler(log_filename)
+    fh.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    # Also add a stream handler (messages will appear on the console)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    # Allow propagation to the parent logger so global logger also gets these messages.
+    logger.propagate = True
+    return logger
+
+# Run a shell command while capturing its output in real time.
+def run_command(command, logger=global_logger):
+    logger.info(f"Executing command:\n{command}")
+    process = subprocess.Popen(command, shell=True,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT,
+                               text=True)
+    while True:
+        line = process.stdout.readline()
+        if line:
+            logger.info(line.strip())
+        elif process.poll() is not None:
+            break
+    retcode = process.wait()
+    if retcode:
+        logger.error(f"Command failed with exit code {retcode}")
+        exit(retcode)
 
 def ensure_dir_exists(directory):
     if not os.path.exists(directory):
@@ -29,108 +90,105 @@ def find_fastq(filepath):
     raise FileNotFoundError(f"{filepath} or {filepath}.gz not found.")
 
 def readqc(args):
-    print("[INFO] Running Read QC")
+    logger = get_step_logger("readqc")
+    logger.info("Running Read QC")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
     r1_path = find_fastq(args.r1)
     r2_path = find_fastq(args.r2)
-    command = script_dir+f"/bin/metahit-modules/read_qc.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -o {output_dir} -t {args.threads}"
+    command = (script_dir + f"/bin/metahit-modules/read_qc.sh -p {script_dir} "
+               f"-1 {r1_path} -2 {r2_path} -o {output_dir} -t {args.threads}")
     if args.xmx:
         command += f" --xmx {args.xmx}"
     if args.ftm:
         command += f" --ftm {args.ftm}"
-    run_command(command)
+    run_command(command, logger)
+    logger.info("Finished Read QC successfully")
 
 def assembly(args):
-    print("[INFO] Running Assembly")
+    logger = get_step_logger("assembly")
+    logger.info("Running Assembly")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-
     if args.metaflye:
-        # Validate R1 and R2 files
         if not args.r1 or not args.r2:
-            print("[ERROR] Flye assembly requires both R1 and R2 FASTQ files specified with -1 and -2.")
+            logger.error("Flye assembly requires both R1 and R2 FASTQ files specified with -1 and -2.")
             exit(1)
         r1_path = find_fastq(args.r1)
         r2_path = find_fastq(args.r2)
-
-        # Validate Flye method or use default
         flye_method = args.method if args.method else "--nano-raw"
-
-        # Construct Flye command
-        command = script_dir + f"/bin/metahit-modules/assembly.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -o {output_dir} --metaflye --flye-method --{flye_method}"
-        run_command(command)
+        command = (script_dir + f"/bin/metahit-modules/assembly.sh -p {script_dir} "
+                   f"-1 {r1_path} -2 {r2_path} -o {output_dir} --metaflye --flye-method --{flye_method}")
+        run_command(command, logger)
     else:
-        # Handle other assembly methods
         r1_path = find_fastq(args.r1)
         r2_path = find_fastq(args.r2)
-
-        command = script_dir + f"/bin/metahit-modules/assembly.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -o {output_dir} -m {args.memory} -t {args.threads}"
+        command = (script_dir + f"/bin/metahit-modules/assembly.sh -p {script_dir} "
+                   f"-1 {r1_path} -2 {r2_path} -o {output_dir} -m {args.memory} -t {args.threads}")
         if args.min_len:
             command += f" -l {args.min_len}"
         if args.megahit:
             command += f" --megahit --k-min {args.k_min} --k-max {args.k_max} --k-step {args.k_step}"
         elif args.metaspades:
             command += f" --metaspades --k-list {args.k_list}"
-
-        run_command(command)
-
-
+        run_command(command, logger)
+    logger.info("Finished Assembly successfully")
 
 def alignment(args):
-    print("[INFO] Running Alignment")
+    logger = get_step_logger("alignment")
+    logger.info("Running Alignment")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
     r1_path = find_fastq(args.r1)
     r2_path = find_fastq(args.r2)
-    command = script_dir+f"/bin/metahit-modules/alignment.sh -p {script_dir} -r {absolute_path(args.ref)} -1 {r1_path} -2 {r2_path} -o {output_dir} --threads {args.threads}"
+    command = (script_dir + f"/bin/metahit-modules/alignment.sh -p {script_dir} -r {absolute_path(args.ref)} "
+               f"-1 {r1_path} -2 {r2_path} -o {output_dir} --threads {args.threads}")
     if args.samtools_filter:
         command += f" --samtools-filter '{args.samtools_filter}'"
-    run_command(command)
+    run_command(command, logger)
+    logger.info("Finished Alignment successfully")
 
 def coverage_estimation(args):
-    print("[INFO] Running Coverage Estimation")
+    logger = get_step_logger("coverage_estimation")
+    logger.info("Running Coverage Estimation")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
     r1_path = find_fastq(args.r1)
     r2_path = find_fastq(args.r2)
-    command = script_dir+f"/bin/metahit-modules/coverage_estimation.sh -p {script_dir} -1 {r1_path} -2 {r2_path} -r {absolute_path(args.ref)} -o {output_dir}"
-    run_command(command)
+    command = (script_dir + f"/bin/metahit-modules/coverage_estimation.sh -p {script_dir} "
+               f"-1 {r1_path} -2 {r2_path} -r {absolute_path(args.ref)} -o {output_dir}")
+    run_command(command, logger)
+    logger.info("Finished Coverage Estimation successfully")
 
 def raw_contact(args):
-    print("[INFO] Running Raw Contact Generation")
+    logger = get_step_logger("raw_contact")
+    logger.info("Running Raw Contact Generation")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-    
-    # Check if enzyme argument is provided
     if not args.enzyme:
-        print("[ERROR] Missing enzyme argument.")
+        logger.error("Missing enzyme argument.")
         exit(1)
-
-    command = (
-        script_dir+f"/bin/metahit-modules/raw_contact.sh -p {script_dir} --bam {absolute_path(args.bam)} "
-        f"--fasta {absolute_path(args.fasta)} --out {output_dir} --enzyme {args.enzyme}"
-    )
-    
-    # Optional coverage file
+    command = (script_dir + f"/bin/metahit-modules/raw_contact.sh -p {script_dir} "
+               f"--bam {absolute_path(args.bam)} --fasta {absolute_path(args.fasta)} "
+               f"--out {output_dir} --enzyme {args.enzyme}")
     if args.coverage:
         command += f" --coverage {absolute_path(args.coverage)}"
-    
-    run_command(command)
-
+    run_command(command, logger)
+    logger.info("Finished Raw Contact Generation successfully")
 
 def normalization(args):
-    print(f"[INFO] Running {args.method} Normalization")
+    logger = get_step_logger("normalization")
+    logger.info(f"Running {args.method} Normalization")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-
-    # Construct the normalization command
-    command = f'"{script_dir}/bin/metahit-modules/normalization.sh" {args.method} -p "{script_dir}" --contig_file "{absolute_path(args.contig_file)}" --contact_matrix_file "{absolute_path(args.contact_matrix_file)}" --output "{output_dir}" --thres {args.thres}'
-
+    command = (f'"{script_dir}/bin/metahit-modules/normalization.sh" {args.method} -p "{script_dir}" '
+               f'--contig_file "{absolute_path(args.contig_file)}" '
+               f'--contact_matrix_file "{absolute_path(args.contact_matrix_file)}" '
+               f'--output "{output_dir}" --thres {args.thres}')
     if args.method == "raw":
         command += f" --min_len {args.min_len} --min_signal {args.min_signal}"
     elif args.method == "normcc":
-        print("[INFO] Running NormCC Normalization")
+        logger.info("Running NormCC Normalization")
     elif args.method == "hiczin":
         command += f" --epsilon {args.epsilon}"
     elif args.method == "bin3c":
@@ -139,22 +197,19 @@ def normalization(args):
         command += f" --epsilon {args.epsilon}"
     elif args.method == "fastnorm":
         command += f" --epsilon {args.epsilon}"
-
-    print(f"[DEBUG] Running command: {command}")
-    run_command(command)
+    logger.info(f"Running command: {command}")
+    run_command(command, logger)
+    logger.info(f"Finished {args.method} Normalization successfully")
 
 def bin_refinement(args):
-    print("[INFO] Running Bin Refinement")
+    logger = get_step_logger("bin_refinement")
+    logger.info("Running Bin Refinement")
     output_dir = absolute_path(args.output)
     ensure_dir_exists(output_dir)
-    
     fasta_file = absolute_path(args.fasta)
     bam_file = absolute_path(args.bam)
-    
-    # Construct the bin_refinement.sh command
-    command = script_dir+f"/bin/metahit-modules/bin_refinement.sh {fasta_file} {bam_file} {output_dir} {script_dir}"
-    
-    # Append optional arguments
+    command = (script_dir + f"/bin/metahit-modules/bin_refinement.sh {fasta_file} {bam_file} "
+               f"{output_dir} {script_dir}")
     if args.threads:
         command += f" -t {args.threads}"
     if args.enzyme:
@@ -172,62 +227,53 @@ def bin_refinement(args):
         command += f" --thres {args.thres}"
     if args.cover:
         command += f" --cover"
-    
-    # Execute the command
-    run_command(command)
-
+    run_command(command, logger)
+    logger.info("Finished Bin Refinement successfully")
 
 def scaffolding(args):
-    print("[INFO] Running Scaffolding")
+    logger = get_step_logger("scaffolding")
+    logger.info("Running Scaffolding")
     output_dir = os.path.abspath(args.outdir)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    command = (
-        f'"{script_dir}/bin/metahit-modules/scaffolding.sh" '
-        f'-p "{script_dir}" '
-        f'--fasta "{args.fasta}" --bam "{args.bam}" --enzyme "{args.enzyme}" '
-        f'--hic1 "{args.hic1}" --hic2 "{args.hic2}" --outdir "{output_dir}" '
-        f'-t {args.threads} -m {args.memory} -r {args.resolution}'
-    )
-    run_command(command)
+    os.makedirs(output_dir, exist_ok=True)
+    command = (f'"{script_dir}/bin/metahit-modules/scaffolding.sh" -p "{script_dir}" '
+               f'--fasta "{args.fasta}" --bam "{args.bam}" --enzyme "{args.enzyme}" '
+               f'--hic1 "{args.hic1}" --hic2 "{args.hic2}" --outdir "{output_dir}" '
+               f'-t {args.threads} -m {args.memory} -r {args.resolution}')
+    run_command(command, logger)
+    logger.info("Finished Scaffolding successfully")
 
 def genomad(args):
-    print("[INFO] Running genomad annotation")
+    logger = get_step_logger("genomad")
+    logger.info("Running genomad annotation")
     output_dir = absolute_path(args.outdir)
-    ensure_dir_exists(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
     cmd = f'"{script_dir}/bin/metahit-modules/genomad.sh" -p "{absolute_path(args.genome_file)}" -o "{output_dir}"'
     if args.splits:
         cmd += f' -s {args.splits}'
     else:
         cmd += " -s 8"
-    print(f"[DEBUG] Executing command: {cmd}")
-    run_command(cmd)
-
+    logger.info(f"Executing command: {cmd}")
+    run_command(cmd, logger)
+    logger.info("Finished genomad annotation successfully")
 
 def reassembly(args):
-    print("[INFO] Running Reassembly")
+    logger = get_step_logger("reassembly")
+    logger.info("Running Reassembly")
     output_dir = os.path.abspath(args.outdir)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    command = (
-        f'"{script_dir}/bin/metahit-modules/reassembly.sh" '
-        f'-p "{script_dir}" '
-        f'--bin "{args.bin}" --hic1 "{args.hic1}" --hic2 "{args.hic2}" '
-        f'--sg1 "{args.sg1}" --sg2 "{args.sg2}" --bam "{args.bam}" '
-        f'--outdir "{output_dir}" -t {args.threads} -m {args.memory}'
-    )
-    run_command(command)
-
+    os.makedirs(output_dir, exist_ok=True)
+    command = (f'"{script_dir}/bin/metahit-modules/reassembly.sh" -p "{script_dir}" '
+               f'--bin "{args.bin}" --hic1 "{args.hic1}" --hic2 "{args.hic2}" '
+               f'--sg1 "{args.sg1}" --sg2 "{args.sg2}" --bam "{args.bam}" '
+               f'--outdir "{output_dir}" -t {args.threads} -m {args.memory}')
+    run_command(command, logger)
+    logger.info("Finished Reassembly successfully")
 
 def viralcc(args):
-    print("[INFO] Running ViralCC pipeline")
+    logger = get_step_logger("viralcc")
+    logger.info("Running ViralCC pipeline")
     output_dir = os.path.abspath(args.OUTDIR)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    command = (
-        f'"{script_dir}/bin/metahit-modules/viral_binning.sh" pipeline '
-        f'-p "{script_dir}" '
-    )
+    os.makedirs(output_dir, exist_ok=True)
+    command = (f'"{script_dir}/bin/metahit-modules/viral_binning.sh" pipeline -p "{script_dir}" ')
     if args.min_len:
         command += f"--min-len {args.min_len} "
     if args.min_mapq:
@@ -238,73 +284,59 @@ def viralcc(args):
         command += f"--min-k {args.min_k} "
     if args.random_seed:
         command += f"--random-seed {args.random_seed} "
-
     command += f'"{args.FASTA}" "{args.BAM}" "{args.VIRAL}" "{output_dir}"'
-
-    run_command(command)
-
+    run_command(command, logger)
+    logger.info("Finished ViralCC pipeline successfully")
 
 def annotation(args):
-    print("[INFO] Annotation function called.")
+    logger = get_step_logger("annotation")
+    logger.info("Running Annotation")
     output_dir = os.path.abspath(args.outdir)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    print("[INFO] Output directory created:", output_dir)
-    
-    command = (
-        f'"{script_dir}/bin/metahit-modules/annotation.sh" '
-        f'-p "{script_dir}" '
-        f'--genome_dir "{args.genome_dir}" '
-        f'--out_dir "{output_dir}" '
-    )
+    os.makedirs(output_dir, exist_ok=True)
+    logger.info(f"Output directory created: {output_dir}")
+    command = (f'"{script_dir}/bin/metahit-modules/annotation.sh" -p "{script_dir}" '
+               f'--genome_dir "{args.genome_dir}" --out_dir "{output_dir}" ')
     if args.extension:
         command += f'--extension {args.extension} '
     if args.cpus:
         command += f'--cpus {args.cpus} '
-
-    print(f"[DEBUG] Running command: {command}")
-    run_command(command)
+    logger.info(f"Running command: {command}")
+    run_command(command, logger)
+    logger.info("Finished Annotation successfully")
 
 def bin_plot(args):
-    print("[INFO] Running Bin Plot")
+    logger = get_step_logger("bin_plot")
+    logger.info("Running Bin Plot")
     output_dir = absolute_path(args.OUTDIR)
-    ensure_dir_exists(output_dir)
-
+    os.makedirs(output_dir, exist_ok=True)
     contact_map_path = absolute_path(args.contact_map)
     bin_path = absolute_path(args.BIN)
-
-    command = (
-        f'"{script_dir}/bin/metahit-modules/bin_plot.sh" '
-        f'--contact-map "{contact_map_path}" '
-        f'--BIN "{bin_path}" '
-        f'--OUTDIR "{output_dir}"'
-    )
-    run_command(command)
+    command = (f'"{script_dir}/bin/metahit-modules/bin_plot.sh" '
+               f'--contact-map "{contact_map_path}" --BIN "{bin_path}" --OUTDIR "{output_dir}"')
+    run_command(command, logger)
+    logger.info("Finished Bin Plot successfully")
 
 def virus_host_interaction(args):
-    print("[INFO] Running Virus-Host Interaction")
+    logger = get_step_logger("virus_host_interaction")
+    logger.info("Running Virus-Host Interaction")
     output_dir = absolute_path(args.OUTDIR)
-    ensure_dir_exists(output_dir)
-
+    os.makedirs(output_dir, exist_ok=True)
     bin_file = absolute_path(args.BIN)
     viral_contig_file = absolute_path(args.viral_contig)
     contact_file = absolute_path(args.contact)
-
-    command = (
-        f'"{script_dir}/bin/metahit-modules/virus_host_interaction.sh" '
-        f'--BIN "{bin_file}" '
-        f'--viral-contig "{viral_contig_file}" '
-        f'--contact "{contact_file}" '
-        f'--OUTDIR "{output_dir}" -p "{script_dir}" -t {args.threads} -m {args.memory}'
-    )
-    run_command(command)
-
-
-
+    command = (f'"{script_dir}/bin/metahit-modules/virus_host_interaction.sh" '
+               f'--BIN "{bin_file}" --viral-contig "{viral_contig_file}" --contact "{contact_file}" '
+               f'--OUTDIR "{output_dir}" -p "{script_dir}" -t {args.threads} -m {args.memory}')
+    run_command(command, logger)
+    logger.info("Finished Virus-Host Interaction successfully")
 
 def main():
+    global_logger.info("Starting MetaHit pipeline")
+    
     parser = argparse.ArgumentParser(description="MetaHit Pipeline Command Line Interface")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # (Argument definitions for each subcommand are here; see full code above)
 
     # Read QC
     qc_parser = subparsers.add_parser("readqc")
@@ -342,7 +374,6 @@ def main():
     asm_parser.add_argument("--metaflye", action="store_true", help="Use Flye for assembly")
     asm_parser.add_argument("--method", required=False, help="Flye method (e.g., --nano-raw, --nano-hq, --pacbio-raw)")
 
-
     # Alignment
     aln_parser = subparsers.add_parser("alignment")
     aln_parser.add_argument("-r", "--ref", required=True, help="Path to reference assembly file")
@@ -366,7 +397,6 @@ def main():
     raw_parser.add_argument("--out", dest="output", required=True, help="Output directory")
     raw_parser.add_argument("--coverage", help="Path to coverage file")
     raw_parser.add_argument("--enzyme", required=True, help="Enzyme name used in Hi-C experiment")
-
 
     # Normalization Command
     norm_parser = subparsers.add_parser("normalization")
@@ -395,7 +425,7 @@ def main():
     refinement_parser.add_argument("--thres", type=float, default=0.01, help="Fraction threshold for NormCC-normalized Hi-C contacts (default: 0.01)")
     refinement_parser.add_argument("--cover", action='store_true', help="Overwrite existing files if set")
 
-    # scaffolding子命令
+    # Scaffolding
     scaff_parser = subparsers.add_parser("scaffolding", help="Perform scaffolding")
     scaff_parser.add_argument("--fasta", required=True, help="Reference FASTA")
     scaff_parser.add_argument("--bam", required=True, help="Hi-C BAM file")
@@ -407,7 +437,7 @@ def main():
     scaff_parser.add_argument("-m", "--memory", type=int, default=24, help="Memory in GB")
     scaff_parser.add_argument("-r", "--resolution", type=int, default=10000, help="Resolution (default 10kb)")
 
-    # reassembly子命令
+    # Reassembly
     reasm_parser = subparsers.add_parser("reassembly", help="Perform reassembly")
     reasm_parser.add_argument("--bin", required=True, help="Binning result directory")
     reasm_parser.add_argument("--hic1", required=True, help="Hi-C library forward fastq")
@@ -466,10 +496,10 @@ def main():
     genomad_parser.add_argument("-s", "--splits", type=int, default=8, help="Number of splits to use (default: 8)")
     genomad_parser.set_defaults(func=genomad)
 
-    # Link the subcommand to the function
     refinement_parser.set_defaults(func=bin_refinement)
 
     args = parser.parse_args()
+    global_logger.info(f"Command received: {args.command}")
     if args.command == "readqc":
         readqc(args)
     elif args.command == "assembly":
@@ -495,8 +525,7 @@ def main():
         annotation(args)
     elif args.command == "genomad":
         genomad(args)
-
-
+    global_logger.info("MetaHit pipeline finished successfully")
 
 if __name__ == "__main__":
     main()
