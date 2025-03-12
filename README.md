@@ -5,7 +5,7 @@ Metahit is a cutting-edge metagenomic data processing pipeline.
 
 ## System Requirements
 ### Hardware requirements
-Metahit requires only a x86 computer with enough RAM to support the in-memory operations.
+Metahit requires only a x86 computer with enough RAM (64GB+ is recommended) to support the in-memory operations.
 
 #### OS Requirements
 Metahit is supported and tested in *Linux* systems only.
