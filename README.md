@@ -53,5 +53,7 @@ bash demo.sh
 
 ## Contacts
 
-Hang Yu(yuhang20518@gmail.com)
+Hang Yu (yuhang20518@gmail.com) 
+Yuxuan Du (yuxuan.du@utsa.edu)
+Qin Zhen (zhen.qin@my.utsa.edu)
 
